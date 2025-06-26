@@ -2,9 +2,10 @@
 
 import struct
 import ctypes
+import argparse
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, NamedTuple, Any
-import sys
 
 # Save file structure constants
 SECTOR_SIZE = 4096
@@ -197,7 +198,7 @@ class PokemonSaveParser:
         return saveblock2_data
 
     def parse_party_pokemon(self, saveblock1_data: bytes) -> List[PokemonData]:
-        party_pokemon = []
+        party_pokemon: List[PokemonData] = []
         for slot in range(MAX_PARTY_SIZE):
             pokemon_offset = PARTY_START_OFFSET + slot * PARTY_POKEMON_SIZE
             pokemon_data = saveblock1_data[pokemon_offset:pokemon_offset + PARTY_POKEMON_SIZE]
@@ -281,9 +282,9 @@ class PokemonSaveParser:
 
 
 def main():
-    import argparse
-    import sys
-    sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
+
     parser = argparse.ArgumentParser(description='Pokemon Quetzal Rom Hack Save File Parser')
     parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH,
                         help='Path to the save file (default: ./save/player1.sav)')
