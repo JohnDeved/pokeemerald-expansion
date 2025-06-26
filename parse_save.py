@@ -4,6 +4,7 @@ import struct
 import ctypes
 import argparse
 import sys
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, NamedTuple, Any
 
@@ -280,6 +281,42 @@ class PokemonSaveParser:
         PokemonSaveParser.display_party_pokemon(save_data['party_pokemon'])
         PokemonSaveParser.display_saveblock2_info(save_data)
 
+    @staticmethod
+    def display_party_pokemon_raw(party_pokemon: List[PokemonData]) -> None:
+        print("\n--- Party Pokémon Raw Bytes ---")
+        if not party_pokemon:
+            print("No Pokémon found in party.")
+            return
+        for slot, pokemon in enumerate(party_pokemon, 1):
+            nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
+            print(f"\n--- Slot {slot}: {nickname} ---")
+            raw_bytes = bytes(pokemon)
+            print(' '.join(f'{b:02x}' for b in raw_bytes))
+
+    @staticmethod
+    def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
+        data = {}
+        for field_name, _ in pokemon._fields_:
+            value = getattr(pokemon, field_name)
+            if field_name == "nickname":
+                data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
+            elif isinstance(value, ctypes.Array):
+                data[field_name] = list(value)
+            else:
+                data[field_name] = value
+        return data
+
+    @staticmethod
+    def display_json_output(save_data: Dict[str, Any]) -> None:
+        json_output = {
+            'player_name': save_data['player_name'],
+            'play_time': save_data['play_time'],
+            'active_slot': save_data['active_slot'],
+            'sector_map': save_data['sector_map'],
+            'party_pokemon': [PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']]
+        }
+        print(json.dumps(json_output))
+
 
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
@@ -288,13 +325,20 @@ def main():
     parser = argparse.ArgumentParser(description='Pokemon Quetzal Rom Hack Save File Parser')
     parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH,
                         help='Path to the save file (default: ./save/player1.sav)')
+    parser.add_argument('--debugParty', action='store_true', help='Display raw party pokemon bytes')
+    parser.add_argument('--json', action='store_true', help='Return json instead of a human readable table')
     args = parser.parse_args()
     if args.save_file == DEFAULT_SAVE_PATH and len(sys.argv) == 1:
-        print(f"[INFO] No save file specified, using default: {args.save_file}")
+        print(f"[INFO] No save file specified, using default: {args.save_file}", file=sys.stderr)
     try:
         save_parser = PokemonSaveParser(args.save_file)
         save_data = save_parser.parse_save_file()
-        PokemonSaveParser.display_save_info(save_data)
+        if args.json:
+            PokemonSaveParser.display_json_output(save_data)
+        elif args.debugParty:
+            PokemonSaveParser.display_party_pokemon_raw(save_data['party_pokemon'])
+        else:
+            PokemonSaveParser.display_save_info(save_data)
     except (FileNotFoundError, IOError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
