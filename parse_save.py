@@ -15,9 +15,11 @@ SECTOR_FOOTER_SIZE = 12
 SAVEBLOCK1_SIZE = SECTOR_DATA_SIZE * 4
 SAVEBLOCK2_SIZE = SECTOR_DATA_SIZE
 EMERALD_SIGNATURE = 0x08012025
+VANILLA_POKEMON_NAME_LENGTH = 10
+PLAYER_NAME_LENGTH = 7
 
 # Party Pokemon constants (for this save file format)
-PARTY_START_OFFSET = 0x6B0
+PARTY_START_OFFSET = 0x6A8
 PARTY_POKEMON_SIZE = 104
 MAX_PARTY_SIZE = 6
 
@@ -72,8 +74,12 @@ class PokemonData(ctypes.Structure):
     _pack_ = 1
     _fields_ = [
         # BoxPokemon-like data (first 80 bytes) - but with differences from standard pokeemerald
-        ("nickname", ctypes.c_uint8 * 18),      # 0x00 - Pokemon nickname (18 bytes in this format)
-        ("unknown_12", ctypes.c_uint8 * 6),     # 0x12 - Language, flags, and other packed data
+        ("personality", ctypes.c_uint32),  # 0x00 - Personality value (32-bit)
+        ("otId", ctypes.c_uint32),          # 0x00 - Original Trainer ID (32-bit)
+        ("nickname", ctypes.c_uint8 * VANILLA_POKEMON_NAME_LENGTH),      # 0x00 - Pokemon nickname (18 bytes in this format)
+        ("unknown_0A", ctypes.c_uint8 * 2),     # 0x0A - Unknown data (2 bytes)
+        ("otName", ctypes.c_uint8 * PLAYER_NAME_LENGTH),      # 0x0C - Original Trainer name (7 bytes)
+        ("unknown_12", ctypes.c_uint8 * 5),     # 0x12 - Language, flags, and other packed data
         ("unknown_18", ctypes.c_uint8 * 3),     # 0x18 - Unknown data
         ("currentHp", ctypes.c_uint8),          # 0x1B - Current HP ✓ VERIFIED
         ("unknown_1C", ctypes.c_uint8 * 4),     # 0x1C - Unknown data
@@ -97,7 +103,6 @@ class PokemonData(ctypes.Structure):
         ("speed", ctypes.c_uint16),             # 0x58 - Speed stat (16-bit)
         ("spAttack", ctypes.c_uint16),          # 0x5A - Special Attack stat (16-bit)
         ("spDefense", ctypes.c_uint16),         # 0x5C - Special Defense stat (16-bit)
-        ("unknown_5E", ctypes.c_uint8 * 10),    # 0x5E - Additional unknown data
     ]
 
 
@@ -254,11 +259,12 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
-        header = f" {'Slot':<5}{'Nickname':<12}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+        header = f" {'Slot':<5}{'Nickname':<12}{'OT Name':<10}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
+            ot_name = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.otName))
             species_display = f"{pokemon.species_id}"
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
@@ -267,7 +273,7 @@ class PokemonSaveParser:
             hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
             hp_display = f"[{hp_bar}] {hp_text}"
             stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-            print(f" {slot:<5}{nickname:<12}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
+            print(f" {slot:<5}{nickname:<12}{ot_name:<10}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
@@ -300,7 +306,7 @@ class PokemonSaveParser:
         data = {}
         for field_name, _ in pokemon._fields_:
             value = getattr(pokemon, field_name)
-            if field_name == "nickname":
+            if field_name in ["nickname", "otName"]:
                 data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
             elif isinstance(value, ctypes.Array):
                 data[field_name] = list(value)
