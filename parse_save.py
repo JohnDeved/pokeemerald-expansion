@@ -50,6 +50,35 @@ POKEMON_CHAR_MAP = {
     0xFF: " "
 }
 
+# Pokémon nature map
+POKEMON_NATURE_MAP = {
+    0: "Hardy",
+    1: "Lonely",
+    2: "Brave",
+    3: "Adamant",
+    4: "Naughty",
+    5: "Bold",
+    6: "Docile",
+    7: "Relaxed",
+    8: "Impish",
+    9: "Lax",
+    10: "Timid",
+    11: "Hasty",
+    12: "Serious",
+    13: "Jolly",
+    14: "Naive",
+    15: "Modest",
+    16: "Mild",
+    17: "Quiet",
+    18: "Bashful",
+    19: "Rash",
+    20: "Calm",
+    21: "Gentle",
+    22: "Sassy",
+    23: "Careful",
+    24: "Quirky"
+}
+
 
 class SaveBlock2(ctypes.Structure):
     _pack_ = 1
@@ -108,6 +137,12 @@ class PokemonData(ctypes.Structure):
         ("spAttack", ctypes.c_uint16),          # 0x5A - Special Attack stat (16-bit)
         ("spDefense", ctypes.c_uint16),         # 0x5C - Special Defense stat (16-bit)
     ]
+    displayOtId: int = 0
+    @property
+    def displayNature(self) -> str:
+        # The nature field may be out of range, so mod by 25
+        index = self.nature % 25
+        return POKEMON_NATURE_MAP.get(index, f"Unknown({self.nature})")
 
 
 class SectorInfo(NamedTuple):
@@ -220,6 +255,7 @@ class PokemonSaveParser:
             pokemon_struct = PokemonData.from_buffer_copy(pokemon_data[:ctypes.sizeof(PokemonData)])
             if pokemon_struct.species_id == 0:
                 break
+            pokemon_struct.displayOtId = pokemon_struct.otId & 0xFFFF
             party_pokemon.append(pokemon_struct)
         return party_pokemon
 
@@ -263,12 +299,13 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
-        header = f" {'Slot':<5}{'Personality':<12}{'Nickname':<12}{'OT Name':<10}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+        header = f" {'Slot':<5}{'Personality':<12}{'Nickname':<12}{'OT Name':<10}{'IDNo':<7}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             ot_name = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.otName))
+            id_no_str = f"{pokemon.displayOtId:05}"
             species_display = f"{pokemon.species_id}"
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
@@ -277,7 +314,7 @@ class PokemonSaveParser:
             hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
             hp_display = f"[{hp_bar}] {hp_text}"
             stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-            print(f" {slot:<5}{pokemon.nature:<12}{nickname:<12}{ot_name:<10}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
+            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{id_no_str:<7}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
@@ -294,15 +331,15 @@ class PokemonSaveParser:
         PokemonSaveParser.display_saveblock2_info(save_data)
 
     @staticmethod
-    def display_party_pokemon_raw(party_pokemon: List[PokemonData]) -> None:
+    def display_party_pokemon_raw(party_pokemon: List[Dict[str, Any]]) -> None:
         print("\n--- Party Pokémon Raw Bytes ---")
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
         for slot, pokemon in enumerate(party_pokemon, 1):
-            nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
+            nickname = pokemon['nickname']
             print(f"\n--- Slot {slot}: {nickname} ---")
-            raw_bytes = bytes(pokemon)
+            raw_bytes = pokemon['raw_bytes']
             print(' '.join(f'{b:02x}' for b in raw_bytes))
 
     @staticmethod
@@ -316,16 +353,23 @@ class PokemonSaveParser:
                 data[field_name] = list(value)
             else:
                 data[field_name] = value
+        data['displayOtId'] = pokemon.displayOtId
         return data
 
     @staticmethod
     def display_json_output(save_data: Dict[str, Any]) -> None:
+        party_pokemon_for_json = []
+        for p in save_data['party_pokemon']:
+            pokemon_copy = p.copy()
+            del pokemon_copy['raw_bytes']
+            party_pokemon_for_json.append(pokemon_copy)
+        
         json_output = {
             'player_name': save_data['player_name'],
             'play_time': save_data['play_time'],
             'active_slot': save_data['active_slot'],
             'sector_map': save_data['sector_map'],
-            'party_pokemon': [PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']]
+            'party_pokemon': party_pokemon_for_json
         }
         print(json.dumps(json_output))
 
