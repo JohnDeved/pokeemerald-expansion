@@ -137,12 +137,15 @@ class PokemonData(ctypes.Structure):
         ("spAttack", ctypes.c_uint16),          # 0x5A - Special Attack stat (16-bit)
         ("spDefense", ctypes.c_uint16),         # 0x5C - Special Defense stat (16-bit)
     ]
-    displayOtId: int = 0
     @property
     def displayNature(self) -> str:
         # The nature field may be out of range, so mod by 25
         index = self.nature % 25
         return POKEMON_NATURE_MAP.get(index, f"Unknown({self.nature})")
+    @property
+    def displayOtId(self) -> str:
+        # Returns the lower 16 bits of otId as a zero-padded 5-digit string
+        return f"{self.otId & 0xFFFF:05}"
 
 
 class SectorInfo(NamedTuple):
@@ -255,7 +258,7 @@ class PokemonSaveParser:
             pokemon_struct = PokemonData.from_buffer_copy(pokemon_data[:ctypes.sizeof(PokemonData)])
             if pokemon_struct.species_id == 0:
                 break
-            pokemon_struct.displayOtId = pokemon_struct.otId & 0xFFFF
+            # displayOtId is now a property, no assignment needed
             party_pokemon.append(pokemon_struct)
         return party_pokemon
 
@@ -305,7 +308,6 @@ class PokemonSaveParser:
         for slot, pokemon in enumerate(party_pokemon, 1):
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             ot_name = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.otName))
-            id_no_str = f"{pokemon.displayOtId:05}"
             species_display = f"{pokemon.species_id}"
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
@@ -314,7 +316,7 @@ class PokemonSaveParser:
             hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
             hp_display = f"[{hp_bar}] {hp_text}"
             stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{id_no_str:<7}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
+            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{pokemon.displayOtId:<7}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
