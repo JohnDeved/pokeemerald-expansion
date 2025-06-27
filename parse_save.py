@@ -258,7 +258,8 @@ class PokemonSaveParser:
             pokemon_struct = PokemonData.from_buffer_copy(pokemon_data[:ctypes.sizeof(PokemonData)])
             if pokemon_struct.species_id == 0:
                 break
-            # displayOtId is now a property, no assignment needed
+            # Store raw bytes as an attribute for debugging
+            pokemon_struct.raw_bytes = pokemon_data
             party_pokemon.append(pokemon_struct)
         return party_pokemon
 
@@ -333,15 +334,16 @@ class PokemonSaveParser:
         PokemonSaveParser.display_saveblock2_info(save_data)
 
     @staticmethod
-    def display_party_pokemon_raw(party_pokemon: List[Dict[str, Any]]) -> None:
+    def display_party_pokemon_raw(party_pokemon: List[PokemonData]) -> None:
         print("\n--- Party Pokémon Raw Bytes ---")
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
         for slot, pokemon in enumerate(party_pokemon, 1):
-            nickname = pokemon['nickname']
+            nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             print(f"\n--- Slot {slot}: {nickname} ---")
-            raw_bytes = pokemon['raw_bytes']
+            # Use the raw bytes stored during parsing
+            raw_bytes = pokemon.raw_bytes
             print(' '.join(f'{b:02x}' for b in raw_bytes))
 
     @staticmethod
@@ -356,16 +358,13 @@ class PokemonSaveParser:
             else:
                 data[field_name] = value
         data['displayOtId'] = pokemon.displayOtId
+        data['displayNature'] = pokemon.displayNature
         return data
 
     @staticmethod
     def display_json_output(save_data: Dict[str, Any]) -> None:
-        party_pokemon_for_json = []
-        for p in save_data['party_pokemon']:
-            pokemon_copy = p.copy()
-            del pokemon_copy['raw_bytes']
-            party_pokemon_for_json.append(pokemon_copy)
-        
+        party_pokemon_for_json = [PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']]
+
         json_output = {
             'player_name': save_data['player_name'],
             'play_time': save_data['play_time'],
