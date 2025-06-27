@@ -254,8 +254,9 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
-        print(f"{'Slot':<4} {'Nickname':<12} {'Species ID':<12} {'Lv':<3} {'HP':<28} {'Stats (A/D/S/SA/SD)'}")
-        print("-" * 95)
+        header = f" {'Slot':<5}{'Nickname':<12}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+        print(header)
+        print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             species_display = f"{pokemon.species_id}"
@@ -263,9 +264,10 @@ class PokemonSaveParser:
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
-            hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
-            stats_display = f"{pokemon.attack}/{pokemon.defense}/{pokemon.speed}/{pokemon.spAttack}/{pokemon.spDefense}"
-            print(f" {slot:<4} {nickname:<12} {species_display:<12} {pokemon.level:<3} {hp_display:<28} {stats_display}")
+            hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
+            hp_display = f"[{hp_bar}] {hp_text}"
+            stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
+            print(f" {slot:<5}{nickname:<12}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
