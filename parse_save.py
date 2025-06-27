@@ -74,7 +74,11 @@ class PokemonData(ctypes.Structure):
     _pack_ = 1
     _fields_ = [
         # BoxPokemon-like data (first 80 bytes) - but with differences from standard pokeemerald
-        ("personality", ctypes.c_uint32),  # 0x00 - Personality value (32-bit)
+        # ("personality", ctypes.c_uint32),  # 0x00 - Personality value (32-bit)
+        ("nature", ctypes.c_uint8),  # 0x00 - Personality value (32-bit)
+        ("shinyType", ctypes.c_uint8),  # 0x01 - Shiny type (0 = normal, 1 = shiny, 2 = alternate shiny
+        ("unknown_02", ctypes.c_uint8),  # 0x02 - Unknown data (2 bytes
+        ("unknown_04", ctypes.c_uint8),  # 0x04 - Unknown data (4 bytes, possibly flags or additional info)
         ("otId", ctypes.c_uint32),          # 0x00 - Original Trainer ID (32-bit)
         ("nickname", ctypes.c_uint8 * VANILLA_POKEMON_NAME_LENGTH),      # 0x00 - Pokemon nickname (18 bytes in this format)
         ("unknown_0A", ctypes.c_uint8 * 2),     # 0x0A - Unknown data (2 bytes)
@@ -259,7 +263,7 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
-        header = f" {'Slot':<5}{'Nickname':<12}{'OT Name':<10}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+        header = f" {'Slot':<5}{'Personality':<12}{'Nickname':<12}{'OT Name':<10}{'Species ID':<12}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
@@ -273,7 +277,7 @@ class PokemonSaveParser:
             hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
             hp_display = f"[{hp_bar}] {hp_text}"
             stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-            print(f" {slot:<5}{nickname:<12}{ot_name:<10}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
+            print(f" {slot:<5}{pokemon.nature:<12}{nickname:<12}{ot_name:<10}{species_display:<12}{pokemon.level:<4}{hp_display:<30} {stats_line}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
