@@ -27,7 +27,7 @@ MAX_PARTY_SIZE = 6
 DEFAULT_SAVE_PATH = "./save/player1.sav"
 
 # Pokémon character encoding map
-POKEMON_CHAR_MAP = {
+POKEMON_CHAR_MAP: Dict[int, str] = {
     0x00: " ", 0x01: "À", 0x02: "Á", 0x03: "Â", 0x04: "Ç", 0x05: "È", 0x06: "É", 0x07: "Ê",
     0x08: "Ë", 0x09: "Ì", 0x0B: "Î", 0x0C: "Ï", 0x0D: "Ò", 0x0E: "Ó", 0x0F: "Ô",
     0x10: "Œ", 0x11: "Ù", 0x12: "Ú", 0x13: "Û", 0x14: "Ñ", 0x15: "ß", 0x16: "à", 0x17: "á",
@@ -51,7 +51,7 @@ POKEMON_CHAR_MAP = {
 }
 
 # Pokémon nature map
-POKEMON_NATURE_MAP = {
+POKEMON_NATURE_MAP: Dict[int, str] = {
     0: "Hardy",
     1: "Lonely",
     2: "Brave",
@@ -137,11 +137,16 @@ class PokemonData(ctypes.Structure):
         ("spAttack", ctypes.c_uint16),          # 0x5A - Special Attack stat (16-bit)
         ("spDefense", ctypes.c_uint16),         # 0x5C - Special Defense stat (16-bit)
     ]
+    
+    # Type annotation for raw_bytes attribute that gets added dynamically
+    raw_bytes: bytes
+    
     @property
     def displayNature(self) -> str:
         # The nature field may be out of range, so mod by 25
         index = self.nature % 25
         return POKEMON_NATURE_MAP.get(index, f"Unknown({self.nature})")
+    
     @property
     def displayOtId(self) -> str:
         # Returns the lower 16 bits of otId as a zero-padded 5-digit string
@@ -309,15 +314,12 @@ class PokemonSaveParser:
         for slot, pokemon in enumerate(party_pokemon, 1):
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             ot_name = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.otName))
-            species_display = f"{pokemon.species_id}"
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
-            hp_text = f"{pokemon.currentHp}/{pokemon.maxHp}"
-            hp_display = f"[{hp_bar}] {hp_text}"
-            stats_line = f"{pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{pokemon.displayOtId:<7}{species_display:<8}{pokemon.level:<4}{hp_display:<30} {stats_line}")
+            hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
+            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{pokemon.displayOtId:<7}{pokemon.species_id:<8}{pokemon.level:<4}{hp_display:<30} {pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}")
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
@@ -348,24 +350,32 @@ class PokemonSaveParser:
 
     @staticmethod
     def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
-        data = {}
-        for field_name, _ in pokemon._fields_:
-            value = getattr(pokemon, field_name)
-            if field_name in ["nickname", "otName"]:
-                data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
-            elif isinstance(value, ctypes.Array):
-                data[field_name] = list(value)
-            else:
-                data[field_name] = value
+        data: Dict[str, Any] = {}
+        
+        # Handle ctypes _fields_ which can be either 2-tuple or 3-tuple
+        for field_info in pokemon._fields_:
+            if len(field_info) >= 2:
+                field_name = field_info[0]
+                value = getattr(pokemon, field_name)
+                
+                if field_name in ["nickname", "otName"]:
+                    data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
+                elif isinstance(value, ctypes.Array):
+                    data[field_name] = [int(x) for x in value]
+                else:
+                    data[field_name] = int(value) if hasattr(value, '__int__') else value
+                    
         data['displayOtId'] = pokemon.displayOtId
         data['displayNature'] = pokemon.displayNature
         return data
 
     @staticmethod
     def display_json_output(save_data: Dict[str, Any]) -> None:
-        party_pokemon_for_json = [PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']]
+        party_pokemon_for_json: List[Dict[str, Any]] = [
+            PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']
+        ]
 
-        json_output = {
+        json_output: Dict[str, Any] = {
             'player_name': save_data['player_name'],
             'play_time': save_data['play_time'],
             'active_slot': save_data['active_slot'],
@@ -375,7 +385,7 @@ class PokemonSaveParser:
         print(json.dumps(json_output))
 
 
-def main():
+def main() -> None:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 
