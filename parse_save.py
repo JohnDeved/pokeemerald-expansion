@@ -142,15 +142,25 @@ class PokemonData(ctypes.Structure):
     raw_bytes: bytes
     
     @property
-    def displayNature(self) -> str:
+    def nature_str(self) -> str:
         # The nature field may be out of range, so mod by 25
         index = self.nature % 25
         return POKEMON_NATURE_MAP.get(index, f"Unknown({self.nature})")
     
     @property
-    def displayOtId(self) -> str:
+    def otId_str(self) -> str:
         # Returns the lower 16 bits of otId as a zero-padded 5-digit string
         return f"{self.otId & 0xFFFF:05}"
+    
+    @property
+    def nickname_str(self) -> str:
+        # Decode the nickname bytes to a string
+        return PokemonSaveParser.decode_pokemon_string(bytes(self.nickname))
+    
+    @property
+    def otName_str(self) -> str:
+        # Decode the original trainer name bytes to a string
+        return PokemonSaveParser.decode_pokemon_string(bytes(self.otName))
 
 
 class SectorInfo(NamedTuple):
@@ -308,18 +318,44 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
-        header = f" {'Slot':<5}{'Nature':<12}{'Nickname':<12}{'OT Name':<10}{'IDNo':<7}{'Dex ID':<8}{'Lv':<4}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+        header = (
+            f"{'Slot':<5}"
+            f"{'Nature':<12}"
+            f"{'Nickname':<12}"
+            f"{'OT Name':<10}"
+            f"{'IDNo':<7}"
+            f"{'Dex ID':<8}"
+            f"{'Lv':<4}"
+            f"{'HP':<30} "
+            f"{'Atk':<5}"
+            f"{'Def':<5}"
+            f"{'Spe':<5}"
+            f"{'SpA':<5}"
+            f"{'SpD':<5}"
+        )
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
-            nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
-            ot_name = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.otName))
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
             hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
-            print(f" {slot:<5}{pokemon.displayNature:<12}{nickname:<12}{ot_name:<10}{pokemon.displayOtId:<7}{pokemon.species_id:<8}{pokemon.level:<4}{hp_display:<30} {pokemon.attack:<5}{pokemon.defense:<5}{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}")
+            print(
+                f"{slot:<5}"
+                f"{pokemon.nature_str:<12}"
+                f"{pokemon.nickname_str:<12}"
+                f"{pokemon.otName_str:<10}"
+                f"{pokemon.otId_str:<7}"
+                f"{pokemon.species_id:<8}"
+                f"{pokemon.level:<4}"
+                f"{hp_display:<30} "
+                f"{pokemon.attack:<5}"
+                f"{pokemon.defense:<5}"
+                f"{pokemon.speed:<5}"
+                f"{pokemon.spAttack:<5}"
+                f"{pokemon.spDefense:<5}"
+            )
 
     @staticmethod
     def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
@@ -345,8 +381,7 @@ class PokemonSaveParser:
             nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
             print(f"\n--- Slot {slot}: {nickname} ---")
             # Use the raw bytes stored during parsing
-            raw_bytes = pokemon.raw_bytes
-            print(' '.join(f'{b:02x}' for b in raw_bytes))
+            print(' '.join(f'{b:02x}' for b in pokemon.raw_bytes))
 
     @staticmethod
     def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
@@ -365,8 +400,8 @@ class PokemonSaveParser:
                 else:
                     data[field_name] = int(value) if hasattr(value, '__int__') else value
                     
-        data['displayOtId'] = pokemon.displayOtId
-        data['displayNature'] = pokemon.displayNature
+        data['displayOtId'] = pokemon.otId_str
+        data['displayNature'] = pokemon.nature_str
         return data
 
     @staticmethod
