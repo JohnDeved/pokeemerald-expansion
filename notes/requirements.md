@@ -329,8 +329,6 @@ struct PokemonSubstruct3
 - Quetzal ground truth documents `currentHp` (u16) at offset 0x55
 - Using vanilla offsets would read completely wrong data!
 
-**Always refer to `docs/quetzal_party_pokemon_struct.md` for the correct Quetzal implementation. The vanilla structures are only for understanding conceptual relationships between data types.**
-
 ## Current Parser Output Analysis
 
 ### Working Test Data (Last Run: 2025-06-28)
