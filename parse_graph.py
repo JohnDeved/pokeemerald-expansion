@@ -1,151 +1,127 @@
 #!/usr/bin/env python3
 
+import sys
+import argparse
 from typing import List, Tuple
-import ctypes
-from parse_save import PokemonSaveParser, DEFAULT_SAVE_PATH, PokemonData
+from parse_save import PokemonSaveParser, DEFAULT_SAVE_PATH
 
-# ANSI color codes
-RED = '\033[91m'
-GREEN = '\033[92m'
-YELLOW = '\033[93m'
-BLUE = '\033[94m'
-MAGENTA = '\033[95m'
-CYAN = '\033[96m'
+# Ensure UTF-8 output for Unicode characters
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+
 RESET = '\033[0m'
 
-
-def display_colored_bytes(raw_bytes: bytes, 
-                         colored_ranges: List[Tuple[int, int, str]], 
-                         label: str = "") -> None:
-    """
-    Display bytes in a formatted way with colored sections and optional label.
+def display_colored_bytes(raw_bytes: bytes, colored_ranges: List[Tuple[int, int, str, str]], bytes_per_line: int = 32) -> None:
+    get_field = lambda idx: next(((s, e, c, n) for s, e, c, n in colored_ranges if s <= idx < e), None)
     
-    Args:
-        raw_bytes: The byte array to display
-        colored_ranges: List of tuples (start_idx, end_idx, color) where:
-                       - start_idx: Starting byte index (inclusive)
-                       - end_idx: Ending byte index (exclusive)
-                       - color: ANSI color code (e.g., RED, GREEN, etc.)
-        label: Optional label to display above the bytes
-    """
-    if label:
-        print(f"{label}:")
-        print()
-    
-    # Create the diagram above the bytes for each colored range
-    line_above = ""
-    for i in range(len(raw_bytes)):
-        # Check if this byte is in any colored range
-        in_colored_range = False
-        for start_idx, end_idx, color in colored_ranges:
-            if start_idx <= i < end_idx:
-                if i == start_idx:
-                    line_above += f"{color}┌─{RESET}"
-                elif i == end_idx - 1:
-                    line_above += f"{color}─┐{RESET}"
-                else:
-                    line_above += f"{color}──{RESET}"
-                    
-                # check if is not after the last byte of the range
-                in_colored_range = True
-                break
+    pos = 0
+    while pos < len(raw_bytes):
+        # Don't split colored ranges across lines
+        line_end = min(pos + bytes_per_line, len(raw_bytes))
+        for s, e, _, _ in colored_ranges:
+            if pos < s < line_end < e: line_end = s; break
+        if line_end == pos: line_end = min(next((e for s, e, _, _ in colored_ranges if s <= pos < e), pos + 1), len(raw_bytes))
         
-        if not in_colored_range:
-            line_above += "--"
+        line_bytes = raw_bytes[pos:line_end]
+        if not line_bytes: break
+            
+        lines, bytes_hex = ["", ""], []
         
-        # Add space after each position except the last
-        if i < len(raw_bytes) - 1:
-            if in_colored_range:
-                line_above += f"┴"
+        # Build label line first
+        label_line = ""
+        i = 0
+        while i < len(line_bytes):
+            idx = pos + i
+            field = get_field(idx)
+            
+            if field and field[3] and idx == field[0]:
+                # This is the start of a field
+                field_bytes_in_line = min(field[1] - field[0], len(line_bytes) - i)
+                width = field_bytes_in_line * 3 - 1
+                name = field[3]
+                if len(name) > width:
+                    name = name[:width-1] + '.' if width > 0 else '.'
+                label_line += f"{field[2]}{name.center(width)}{RESET}"
+                
+                # Skip to end of this field in this line
+                i += field_bytes_in_line
+                
+                # Add space if there's more content after this field
+                if i < len(line_bytes):
+                    label_line += " "
             else:
-                line_above += " "
-    
-    # Print the diagram
-    if any(colored_ranges):  # Only print if there are colored ranges
-        print(line_above)
-    
-    # Create the colored byte array
-    byte_array: List[str] = []
-    for i, b in enumerate(raw_bytes):
-        # Check if this byte should be colored
-        colored = False
-        for start_idx, end_idx, color in colored_ranges:
-            if start_idx <= i < end_idx:
-                byte_array.append(f"{color}{b:02x}{RESET}")
-                colored = True
-                break
+                # Not a field start - add spacing
+                label_line += "   " if i < len(line_bytes) - 1 else "  "
+                i += 1
         
-        if not colored:
-            byte_array.append(f"{b:02x}")
-    
-    print(f"{' '.join(byte_array)}")
-    print()
-
-
-def display_simple_colored_bytes(raw_bytes: bytes, 
-                                field_size: int, 
-                                color: str = RED, 
-                                label: str = "") -> None:
-    """
-    Simplified version that colors the first N bytes.
-    
-    Args:
-        raw_bytes: The byte array to display
-        field_size: Number of bytes from the start to color
-        color: ANSI color code for the first field
-        label: Optional label to display above the bytes
-    """
-    colored_ranges = [(0, field_size, color)] if field_size > 0 else []
-    display_colored_bytes(raw_bytes, colored_ranges, label)
-
+        lines[0] = label_line
+        
+        # Build ASCII art and hex
+        for i, b in enumerate(line_bytes):
+            idx, field = pos + i, get_field(pos + i)
+            
+            # ASCII art & hex
+            if field:
+                s, e, c = field[:3]
+                if e - s == 1:  # Single byte field
+                    art = "─┴"
+                else:
+                    art = "┌─" if idx == s else "─┐" if idx == e-1 else "┴─" if (e-s) % 2 == 1 and idx == s + (e-s)//2 else "──"
+                lines[1] += f"{c}{art}{RESET}"
+                bytes_hex.append(f"{c}{b:02x}{RESET}")
+                
+                # Space handling
+                if i < len(line_bytes) - 1:
+                    next_field = get_field(idx + 1)
+                    space = ("┴" if (e-s) % 2 == 0 and idx == s + (e-s)//2 - 1 else
+                            " " if next_field and next_field != field and next_field[0] == idx + 1 else
+                            "─" if idx + 1 < e else " ")
+                    lines[1] += f"{c if space in '┴─' else ''}{space}{RESET if space in '┴─' else ''}"
+            else:
+                lines[1] += "   " if i < len(line_bytes) - 1 else "  "
+                bytes_hex.append(f"{b:02x}")
+        
+        # Output
+        if lines[0].strip():  # If there are labels
+            print()  # Add empty line for breathing room
+        for line in lines:
+            if line.strip(): print(f"      {line}")
+        print(f"{pos:04x}: {' '.join(bytes_hex)}")
+        pos = line_end
 
 def main() -> None:
-    """Simple byte array log of party Pokemon."""
+    parser = argparse.ArgumentParser(description="Parse and visualize Pokemon save file data")
+    parser.add_argument("path", nargs="?", default=DEFAULT_SAVE_PATH,
+                       help=f"Path to save file (default: {DEFAULT_SAVE_PATH})")
+    args = parser.parse_args()
     
-    # Parse the save file
-    save_parser = PokemonSaveParser(DEFAULT_SAVE_PATH)
-    save_data = save_parser.parse_save_file()
-    party_pokemon = save_data['party_pokemon']
+    save_data = PokemonSaveParser(args.path).parse_save_file()
     
-    # Get the size of the first field dynamically from the struct
-    first_field_name = PokemonData._fields_[0][0]  # Get field name
-    first_field_type = PokemonData._fields_[0][1]  # Get field type
-    first_field_size = ctypes.sizeof(first_field_type)
-    
-    print(f"First field: '{first_field_name}' ({first_field_size} bytes)")
-    print()
-    
-    # Display simple byte arrays using the reusable function
-    for slot, pokemon in enumerate(party_pokemon, 1):
-        display_simple_colored_bytes(
-            pokemon.raw_bytes, 
-            first_field_size, 
-            RED, 
-            f"Slot {slot}"
-        )
-
-
-def example_usage() -> None:
-    """Example of how to use the reusable functions with different colors and ranges."""
-    # Example byte data
-    example_bytes = bytes([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22])
-    
-    # Example 1: Simple coloring of first 4 bytes
-    print("Example 1: Simple coloring")
-    display_simple_colored_bytes(example_bytes, 4, GREEN, "First 4 bytes in green")
-    
-    # Example 2: Multiple colored ranges
-    print("Example 2: Multiple colored ranges")
-    colored_ranges = [
-        (0, 2, RED),      # First 2 bytes in red
-        (4, 6, BLUE),     # Bytes 4-5 in blue  
-        (8, 10, YELLOW)   # Last 2 bytes in yellow
+    # Human-extendable field definitions: (name, offset, size)
+    fields = [
+        ("personality", 0, 4),
+        ("otId", 4, 4),
+        ("nickname", 8, 10),
+        ("otName", 0x14, 7),
+        ("c.HP", 0x23, 2),
+        ("sp.Id", 0x28, 2),
+        ("item", 0x2A, 2),
+        ("moves", 0x34, 0x3F-0x34),
+        ("EVS?", 0x40-1, 6),  # EVs from 0x40 to 0x58
+        ("IV", 0x40+16, 4),
+        ("lv", 0x58, 1),
+        ("HP", 0x5A, 2),
+        ("ATK", 0x5C, 2),
+        ("DEF", 0x5E, 2),
+        ("SPD", 0x60, 2),
+        ("SPA", 0x62, 2),
+        ("SPD", 0x64, 2),
     ]
-    display_colored_bytes(example_bytes, colored_ranges, "Multiple colored sections")
-
+    
+    for slot, pokemon in enumerate(save_data['party_pokemon'], 1):
+        print(f"Slot {slot} ({pokemon.nickname_str} #{pokemon.speciesId}):\n")
+        display_colored_bytes(pokemon.raw_bytes, [(o, o + s, f'\033[{91+i % 6}m', n) for i, (n, o, s) in enumerate(fields)])
+        print("\n" + "-" * 80 + "\n")
 
 if __name__ == "__main__":
     main()
-    
-    # Uncomment the line below to see example usage
-    example_usage()

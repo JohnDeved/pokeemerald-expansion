@@ -64,9 +64,9 @@ def get_move_name(move_id: int) -> str:
     """Get move name by ID"""
     return _move_data.get(move_id, f"Move {move_id}")
 
-def get_species_name(species_id: int) -> str:
+def get_species_name(speciesId: int) -> str:
     """Get species name by ID"""
-    return _species_data.get(species_id, f"Species {species_id}")
+    return _species_data.get(speciesId, f"Species {speciesId}")
 
 def get_char_map() -> Dict[int, str]:
     """Get the loaded character map"""
@@ -87,66 +87,6 @@ class SaveBlock2(ctypes.Structure):
         ("playTimeSeconds", ctypes.c_uint8),
     ]
 
-
-class PokemonSubstruct0(ctypes.Structure):
-    """Growth data substruct (12 bytes)"""
-    _pack_ = 1
-    _fields_ = [
-        ("species", ctypes.c_uint16),       # 0x00 - Species ID
-        ("heldItem", ctypes.c_uint16),      # 0x02 - Held item
-        ("experience", ctypes.c_uint32),    # 0x04 - Experience points
-        ("ppBonuses", ctypes.c_uint8),      # 0x08 - PP bonuses
-        ("friendship", ctypes.c_uint8),     # 0x09 - Friendship
-        ("unknown", ctypes.c_uint16),       # 0x0A - Unknown/padding
-    ]
-
-
-class PokemonSubstruct1(ctypes.Structure):
-    """Moves data substruct (12 bytes)"""
-    _pack_ = 1
-    _fields_ = [
-        ("move1", ctypes.c_uint16),         # 0x00 - Move 1
-        ("move2", ctypes.c_uint16),         # 0x02 - Move 2
-        ("move3", ctypes.c_uint16),         # 0x04 - Move 3
-        ("move4", ctypes.c_uint16),         # 0x06 - Move 4
-        ("pp1", ctypes.c_uint8),            # 0x08 - PP for move 1
-        ("pp2", ctypes.c_uint8),            # 0x09 - PP for move 2
-        ("pp3", ctypes.c_uint8),            # 0x0A - PP for move 3
-        ("pp4", ctypes.c_uint8),            # 0x0B - PP for move 4
-    ]
-
-
-class PokemonSubstruct2(ctypes.Structure):
-    """EVs and Contest stats substruct (12 bytes)"""
-    _pack_ = 1
-    _fields_ = [
-        ("hpEV", ctypes.c_uint8),           # 0x00 - HP EV
-        ("attackEV", ctypes.c_uint8),       # 0x01 - Attack EV
-        ("defenseEV", ctypes.c_uint8),      # 0x02 - Defense EV
-        ("speedEV", ctypes.c_uint8),        # 0x03 - Speed EV
-        ("spAttackEV", ctypes.c_uint8),     # 0x04 - Special Attack EV
-        ("spDefenseEV", ctypes.c_uint8),    # 0x05 - Special Defense EV
-        ("cool", ctypes.c_uint8),           # 0x06 - Cool contest stat
-        ("beauty", ctypes.c_uint8),         # 0x07 - Beauty contest stat
-        ("cute", ctypes.c_uint8),           # 0x08 - Cute contest stat
-        ("smart", ctypes.c_uint8),          # 0x09 - Smart contest stat
-        ("tough", ctypes.c_uint8),          # 0x0A - Tough contest stat
-        ("sheen", ctypes.c_uint8),          # 0x0B - Sheen
-    ]
-
-
-class PokemonSubstruct3(ctypes.Structure):
-    """Misc data substruct (12 bytes)"""
-    _pack_ = 1
-    _fields_ = [
-        ("pokerus", ctypes.c_uint8),        # 0x00 - Pokerus
-        ("metLocation", ctypes.c_uint8),    # 0x01 - Met location
-        ("metLevelAndInfo", ctypes.c_uint16), # 0x02 - Met level and other info
-        ("ivData", ctypes.c_uint32),        # 0x04 - IVs packed in 32-bit value
-        ("ribbonsAndAbility", ctypes.c_uint32), # 0x08 - Ribbons and ability data
-    ]
-
-
 class PokemonData(ctypes.Structure):
     """
     Pokemon data structure for Pokemon Quetzal rom hack (104 bytes total).
@@ -156,46 +96,46 @@ class PokemonData(ctypes.Structure):
     """
     _pack_ = 1
     _fields_ = [
-        # Box Pokemon data - first part
-        ("personality", ctypes.c_uint32),       # 0x00 - Personality value (32-bit)
-        ("otId", ctypes.c_uint32),              # 0x04 - Original Trainer ID (32-bit)
-        ("nickname", ctypes.c_uint8 * VANILLA_POKEMON_NAME_LENGTH),    # 0x08 - Pokemon nickname (10 bytes)
-        ("language", ctypes.c_uint8),           # 0x12 - Language
-        ("unknown_13", ctypes.c_uint8),         # 0x13 - Unknown data (1 byte)
-        ("otName", ctypes.c_uint8 * PLAYER_NAME_LENGTH),  # 0x14 - OT Name (7 bytes) ✓ VERIFIED
-        ("markings", ctypes.c_uint8),           # 0x1B - Markings
-        ("checksum", ctypes.c_uint16),          # 0x1C - Checksum
-        ("hpLost", ctypes.c_uint16),            # 0x1E - HP lost
-        ("unknown_20", ctypes.c_uint8 * 3),     # 0x20 - Unknown data (3 bytes)
-        ("currentHp", ctypes.c_uint16),         # 0x23 - Current HP ✓ VERIFIED
-        ("unknown_25", ctypes.c_uint8 * 3),     # 0x25 - Unknown data (3 bytes)
-        ("species_id", ctypes.c_uint16),        # 0x28 - Species ID ✓ VERIFIED at offset 40
-        ("unknown_2A", ctypes.c_uint8 * 10),    # 0x2A - Unknown/encrypted data (10 bytes)
-        
-        # Move data (unencrypted in party Pokemon) - 0x34-0x3F
-        ("move1", ctypes.c_uint16),             # 0x34 - Move 1 ID
-        ("move2", ctypes.c_uint16),             # 0x36 - Move 2 ID  
-        ("move3", ctypes.c_uint16),             # 0x38 - Move 3 ID
-        ("move4", ctypes.c_uint16),             # 0x3A - Move 4 ID
-        ("pp1", ctypes.c_uint8),                # 0x3C - PP for move 1
-        ("pp2", ctypes.c_uint8),                # 0x3D - PP for move 2
-        ("pp3", ctypes.c_uint8),                # 0x3E - PP for move 3
-        ("pp4", ctypes.c_uint8),                # 0x3F - PP for move 4
-        
-        ("unknown_40", ctypes.c_uint8 * 20),    # 0x40 - Unknown/encrypted data (20 bytes)
-        
-        # Party-specific data starts around 0x54
-        ("unknown_54", ctypes.c_uint16),        # 0x54 - Unknown data (2 bytes)
-        ("unknown_56", ctypes.c_uint8 * 2),     # 0x56 - Unknown (2 bytes)
-        ("level", ctypes.c_uint8),              # 0x58 - Pokemon level ✓ VERIFIED at offset 88
-        ("unknown_59", ctypes.c_uint8),         # 0x59 - Unknown (1 byte)
-        ("maxHp", ctypes.c_uint16),             # 0x5A - Max HP ✓ VERIFIED at offset 90
-        ("attack", ctypes.c_uint16),            # 0x5C - Attack ✓ VERIFIED at offset 92
-        ("defense", ctypes.c_uint16),           # 0x5E - Defense ✓ VERIFIED at offset 94
-        ("speed", ctypes.c_uint16),             # 0x60 - Speed ✓ VERIFIED at offset 96
-        ("spAttack", ctypes.c_uint16),          # 0x62 - Sp.Attack ✓ VERIFIED at offset 98
-        ("spDefense", ctypes.c_uint16),         # 0x64 - Sp.Defense ✓ VERIFIED at offset 100
-        ("unknown_66", ctypes.c_uint8 * 2),     # 0x66 - Unknown (2 bytes to reach 104 total)
+        ("personality", ctypes.c_uint32),           # 0x00 - Personality value (4 bytes)
+        ("otId", ctypes.c_uint32),                  # 0x04 - Original Trainer ID (4 bytes)
+        ("nickname", ctypes.c_uint8 * 10),          # 0x08 - Pokemon nickname (10 bytes)
+        ("unknown_12", ctypes.c_uint8 * 2),         # 0x12 - Unknown/padding (2 bytes)
+        ("otName", ctypes.c_uint8 * 7),             # 0x14 - OT Name (7 bytes)
+        ("unknown_1B", ctypes.c_uint8 * 8),         # 0x1B - Unknown/padding (8 bytes)
+        ("currentHp", ctypes.c_uint16),             # 0x23 - Current HP (2 bytes)
+        ("unknown_25", ctypes.c_uint8 * 3),         # 0x25 - Unknown/padding (3 bytes)
+        ("speciesId", ctypes.c_uint16),             # 0x28 - Species ID (2 bytes)
+        ("item", ctypes.c_uint16),                  # 0x2A - Held Item (2 bytes)
+        ("unknown_2C", ctypes.c_uint8 * 8),         # 0x2C - Unknown/padding (8 bytes)
+        # Moves (0x34 - 0x3B)
+        ("move1", ctypes.c_uint16),                 # 0x34 - Move 1 ID
+        ("move2", ctypes.c_uint16),                 # 0x36 - Move 2 ID
+        ("move3", ctypes.c_uint16),                 # 0x38 - Move 3 ID
+        ("move4", ctypes.c_uint16),                 # 0x3A - Move 4 ID
+        # Move PPs (0x3C - 0x3F)
+        ("pp1", ctypes.c_uint8),                    # 0x3C - PP for move 1
+        ("pp2", ctypes.c_uint8),                    # 0x3D - PP for move 2
+        ("pp3", ctypes.c_uint8),                    # 0x3E - PP for move 3
+        ("pp4", ctypes.c_uint8),                    # 0x3F - PP for move 4
+        # EVs (0x40 - 0x45)
+        ("hpEV", ctypes.c_uint8),                   # 0x40 - HP EV
+        ("atkEV", ctypes.c_uint8),                  # 0x41 - Attack EV
+        ("defEV", ctypes.c_uint8),                  # 0x42 - Defense EV
+        ("speEV", ctypes.c_uint8),                  # 0x43 - Speed EV
+        ("spaEV", ctypes.c_uint8),                  # 0x44 - Sp. Atk EV
+        ("spdEV", ctypes.c_uint8),                  # 0x45 - Sp. Def EV
+        ("unknown_46", ctypes.c_uint8 * 10),        # 0x46 - Unknown/padding (10 bytes)
+        ("ivData", ctypes.c_uint32),                # 0x50 - IVs (4 bytes)
+        ("unknown_54", ctypes.c_uint8 * 4),         # 0x54 - Unknown/padding (4 bytes)
+        ("level", ctypes.c_uint8),                  # 0x58 - Level (1 byte)
+        ("unknown_59", ctypes.c_uint8),             # 0x59 - Unknown/padding (1 byte)
+        ("maxHp", ctypes.c_uint16),                 # 0x5A - Max HP (2 bytes)
+        ("attack", ctypes.c_uint16),                # 0x5C - Attack (2 bytes)
+        ("defense", ctypes.c_uint16),               # 0x5E - Defense (2 bytes)
+        ("speed", ctypes.c_uint16),                 # 0x60 - Speed (2 bytes)
+        ("spAttack", ctypes.c_uint16),              # 0x62 - Sp. Attack (2 bytes)
+        ("spDefense", ctypes.c_uint16),             # 0x64 - Sp. Defense (2 bytes)
+        ("unknown_66", ctypes.c_uint8 * 2),         # 0x66 - Unknown/padding (2 bytes)
     ]
     
     # Type annotation for raw_bytes attribute that gets added dynamically
@@ -203,8 +143,8 @@ class PokemonData(ctypes.Structure):
     
     @property
     def nature_str(self) -> str:
-        # Nature is derived from personality value mod 25
-        nature_index = self.personality % 25
+        # Nature is determined by the lowest byte of personality. for example if personality is e9 02 00 00, then nature bit is 0xE9.
+        nature_index = (self.personality & 0xFF) % 25  # Get the lowest byte of personality
         return get_nature_name(nature_index)
     
     @property
@@ -225,72 +165,7 @@ class PokemonData(ctypes.Structure):
     @property
     def species_name(self) -> str:
         """Get the species name for this Pokemon"""
-        return get_species_name(self.species_id)
-
-    def decrypt_substruct_data(self) -> bytes:
-        """
-        Decrypt the Pokemon substruct data using the same algorithm as the C code.
-        Returns 48 bytes of decrypted substruct data (4 substructs * 12 bytes each).
-        """
-        if not hasattr(self, 'raw_bytes') or len(self.raw_bytes) < 0x48:
-            return b'\x00' * 48
-        
-        # Extract the encrypted substruct area (48 bytes starting at offset 0x20)
-        # This corresponds to the 'secure' union in the C code
-        encrypted_data = self.raw_bytes[0x20:0x20 + 48]
-        if len(encrypted_data) < 48:
-            return b'\x00' * 48
-        
-        # Convert to 32-bit words for decryption (12 words total)
-        encrypted_words = struct.unpack('<12I', encrypted_data)
-        
-        # Decrypt using the same algorithm as DecryptBoxMon in pokemon.c
-        decrypted_words = []
-        for word in encrypted_words:
-            # First XOR with otId, then with personality (reverse of encryption)
-            word ^= self.otId
-            word ^= self.personality
-            decrypted_words.append(word)
-        
-        return struct.pack('<12I', *decrypted_words)
-    
-    def get_substruct_order(self) -> List[int]:
-        """
-        Get the substruct order based on personality value.
-        Returns list of 4 indices representing the order [0,1,2,3] should be read.
-        Based on the SUBSTRUCT_CASE logic in pokemon.c
-        """
-        order_table = [
-            [0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3], [0, 3, 1, 2],
-            [0, 2, 3, 1], [0, 3, 2, 1], [1, 0, 2, 3], [1, 0, 3, 2],
-            [2, 0, 1, 3], [3, 0, 1, 2], [2, 0, 3, 1], [3, 0, 2, 1],
-            [1, 2, 0, 3], [1, 3, 0, 2], [2, 1, 0, 3], [3, 1, 0, 2],
-            [2, 3, 0, 1], [3, 2, 0, 1], [1, 2, 3, 0], [1, 3, 2, 0],
-            [2, 1, 3, 0], [3, 1, 2, 0], [2, 3, 1, 0], [3, 2, 1, 0]
-        ]
-        return order_table[self.personality % 24]
-    
-    def get_substruct(self, substruct_type: int) -> Optional[bytes]:
-        """
-        Get the decrypted data for a specific substruct type (0-3).
-        Returns 12 bytes of substruct data.
-        """
-        if not (0 <= substruct_type <= 3):
-            return None
-        
-        decrypted_data = self.decrypt_substruct_data()
-        if len(decrypted_data) < 48:
-            return None
-        
-        # Get the actual position of this substruct type based on personality
-        order = self.get_substruct_order()
-        try:
-            substruct_index = order.index(substruct_type)
-        except ValueError:
-            return None
-        
-        start_offset = substruct_index * 12
-        return decrypted_data[start_offset:start_offset + 12]
+        return get_species_name(self.speciesId)
     
     @property
     def moves(self) -> List[int]:
@@ -307,6 +182,29 @@ class PokemonData(ctypes.Structure):
         Now delegates to the new moves property.
         """
         return self.moves
+    
+    @property
+    def evs(self) -> List[int]:
+        """
+        Get the EV values for this Pokemon directly from the structure.
+        Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]
+        """
+        return [self.hpEV, self.atkEV, self.defEV, self.speEV, self.spaEV, self.spdEV]
+    
+    @property
+    def ivs(self) -> List[int]:
+        """
+        Get the IV values for this Pokemon by unpacking the ivData field.
+        Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]
+        """
+        iv_data = self.ivData
+        hp_iv = iv_data & 0x1F
+        atk_iv = (iv_data >> 5) & 0x1F
+        def_iv = (iv_data >> 10) & 0x1F
+        spe_iv = (iv_data >> 15) & 0x1F
+        spa_iv = (iv_data >> 20) & 0x1F
+        spd_iv = (iv_data >> 25) & 0x1F
+        return [hp_iv, atk_iv, def_iv, spe_iv, spa_iv, spd_iv]
     
     @property
     def move_names(self) -> List[str]:
@@ -443,7 +341,7 @@ class PokemonSaveParser:
             if len(pokemon_data) < ctypes.sizeof(PokemonData):
                 break
             pokemon_struct = PokemonData.from_buffer_copy(pokemon_data[:ctypes.sizeof(PokemonData)])
-            if pokemon_struct.species_id == 0:
+            if pokemon_struct.speciesId == 0:
                 break
             # Store raw bytes as an attribute for debugging
             pokemon_struct.raw_bytes = pokemon_data
@@ -515,7 +413,7 @@ class PokemonSaveParser:
             hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
             print(
                 f"{slot:<5}"
-                f"{pokemon.species_id:<8}"
+                f"{pokemon.speciesId:<8}"
                 f"{pokemon.nickname_str:<12}"
                 f"{pokemon.level:<4}"
                 f"{pokemon.nature_str:<10}"
@@ -554,31 +452,6 @@ class PokemonSaveParser:
             print(f"\n--- Slot {slot}: {nickname} ---")
             # Use the raw bytes stored during parsing
             print(' '.join(f'{b:02x}' for b in pokemon.raw_bytes))
-            
-            # Debug substruct data
-            print(f"\nPersonality: 0x{pokemon.personality:08x}")
-            print(f"OT ID: 0x{pokemon.otId:08x}")
-            
-            # Show decrypted substruct data
-            decrypted_data = pokemon.decrypt_substruct_data()
-            print(f"Decrypted substruct data ({len(decrypted_data)} bytes):")
-            for i in range(0, len(decrypted_data), 12):
-                substruct_chunk = decrypted_data[i:i+12]
-                hex_str = ' '.join(f'{b:02x}' for b in substruct_chunk)
-                print(f"  Substruct {i//12}: {hex_str}")
-            
-            # Show substruct order
-            order = pokemon.get_substruct_order()
-            print(f"Substruct order: {order}")
-            
-            # Show moves and PP from structure fields
-            print(f"Moves from structure: {pokemon.moves}")
-            print(f"Move names: {pokemon.move_names}")
-            print(f"PP values: {pokemon.pp_values}")
-            
-            # Show moves analysis for comparison
-            moves = pokemon.moves_from_substruct
-            print(f"Extracted moves (legacy): {moves}")
 
     @staticmethod
     def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
@@ -602,6 +475,10 @@ class PokemonSaveParser:
         data['moves'] = pokemon.moves
         data['moveNames'] = pokemon.move_names
         data['ppValues'] = pokemon.pp_values
+        data['evs'] = pokemon.evs
+        data['ivs'] = pokemon.ivs
+        data['totalEvs'] = sum(pokemon.evs)
+        data['totalIvs'] = sum(pokemon.ivs)
         return data
 
     @staticmethod
@@ -647,7 +524,7 @@ class PokemonSaveParser:
             info_table.add_column("Field", style="cyan")
             info_table.add_column("Value", style="white")
             
-            info_table.add_row("Species", f"{pokemon.species_name} (#{pokemon.species_id})")
+            info_table.add_row("Species", f"{pokemon.species_name} (#{pokemon.speciesId})")
             info_table.add_row("Level", f"{pokemon.level}")
             info_table.add_row("Nature", f"[bold]{pokemon.nature_str}[/bold]")
             info_table.add_row("Trainer", f"{pokemon.otName_str} (ID: {pokemon.otId_str})")
@@ -680,8 +557,7 @@ class PokemonSaveParser:
                 else:
                     moves_table.add_row(f"{i}", "[dim]---[/dim]", "[dim]---[/dim]", "[dim]---[/dim]")
             
-            # EVs and IVs
-            ev_substruct = pokemon.get_substruct(2)
+            # EVs and IVs - use direct properties instead of substruct parsing
             iv_data_table = Table(title="Training Data", box=box.ROUNDED)
             iv_data_table.add_column("Type", style="cyan")
             iv_data_table.add_column("HP", justify="center")
@@ -690,58 +566,59 @@ class PokemonSaveParser:
             iv_data_table.add_column("Spe", justify="center")
             iv_data_table.add_column("SpA", justify="center")
             iv_data_table.add_column("SpD", justify="center")
+            iv_data_table.add_column("Total", justify="center", style="bold")
             
-            if ev_substruct and len(ev_substruct) >= 6:
-                hp_ev = ev_substruct[0]
-                atk_ev = ev_substruct[1]
-                def_ev = ev_substruct[2]
-                spe_ev = ev_substruct[3]
-                spa_ev = ev_substruct[4]
-                spd_ev = ev_substruct[5]
-                total_evs = hp_ev + atk_ev + def_ev + spe_ev + spa_ev + spd_ev
-                
-                ev_style = "green" if total_evs <= 510 else "red"
-                iv_data_table.add_row(
-                    f"[{ev_style}]EVs[/{ev_style}]",
-                    f"[{ev_style}]{hp_ev}[/{ev_style}]",
-                    f"[{ev_style}]{atk_ev}[/{ev_style}]", 
-                    f"[{ev_style}]{def_ev}[/{ev_style}]",
-                    f"[{ev_style}]{spe_ev}[/{ev_style}]",
-                    f"[{ev_style}]{spa_ev}[/{ev_style}]",
-                    f"[{ev_style}]{spd_ev}[/{ev_style}]"
-                )
+            # Get EVs directly from the structure
+            evs = pokemon.evs
+            total_evs = sum(evs)
+            ev_style = "green" if total_evs <= 510 else "red"
+            iv_data_table.add_row(
+                f"[{ev_style}]EVs[/{ev_style}]",
+                f"[{ev_style}]{evs[0]}[/{ev_style}]",  # HP
+                f"[{ev_style}]{evs[1]}[/{ev_style}]",  # Attack
+                f"[{ev_style}]{evs[2]}[/{ev_style}]",  # Defense
+                f"[{ev_style}]{evs[3]}[/{ev_style}]",  # Speed
+                f"[{ev_style}]{evs[4]}[/{ev_style}]",  # Sp.Attack
+                f"[{ev_style}]{evs[5]}[/{ev_style}]",  # Sp.Defense
+                f"[{ev_style}]{total_evs}[/{ev_style}]"  # Total EVs
+            )
             
-            # IVs
-            misc_substruct = pokemon.get_substruct(3)
-            if misc_substruct and len(misc_substruct) >= 8:
-                iv_data = struct.unpack('<I', misc_substruct[4:8])[0]
-                hp_iv = iv_data & 0x1F
-                atk_iv = (iv_data >> 5) & 0x1F
-                def_iv = (iv_data >> 10) & 0x1F
-                spe_iv = (iv_data >> 15) & 0x1F
-                spa_iv = (iv_data >> 20) & 0x1F
-                spd_iv = (iv_data >> 25) & 0x1F
-                
-                # Color code IVs (31 is perfect)
-                def iv_color(iv: int) -> str:
-                    if iv == 31:
-                        return "bright_green"
-                    elif iv >= 25:
-                        return "green" 
-                    elif iv >= 15:
-                        return "yellow"
-                    else:
-                        return "red"
-                
-                iv_data_table.add_row(
-                    "IVs",
-                    f"[{iv_color(hp_iv)}]{hp_iv}[/{iv_color(hp_iv)}]",
-                    f"[{iv_color(atk_iv)}]{atk_iv}[/{iv_color(atk_iv)}]",
-                    f"[{iv_color(def_iv)}]{def_iv}[/{iv_color(def_iv)}]", 
-                    f"[{iv_color(spe_iv)}]{spe_iv}[/{iv_color(spe_iv)}]",
-                    f"[{iv_color(spa_iv)}]{spa_iv}[/{iv_color(spa_iv)}]",
-                    f"[{iv_color(spd_iv)}]{spd_iv}[/{iv_color(spd_iv)}]"
-                )
+            # Get IVs directly from the structure
+            ivs = pokemon.ivs
+            total_ivs = sum(ivs)
+            
+            # Color code IVs (31 is perfect)
+            def iv_color(iv: int) -> str:
+                if iv == 31:
+                    return "bright_green"
+                elif iv >= 25:
+                    return "green" 
+                elif iv >= 15:
+                    return "yellow"
+                else:
+                    return "red"
+            
+            # Color code total IVs (186 is perfect = 31*6)
+            def total_iv_color(total: int) -> str:
+                if total == 186:
+                    return "bright_green"
+                elif total >= 155:  # ~25 average
+                    return "green"
+                elif total >= 93:   # ~15 average
+                    return "yellow"
+                else:
+                    return "red"
+            
+            iv_data_table.add_row(
+                "IVs",
+                f"[{iv_color(ivs[0])}]{ivs[0]}[/{iv_color(ivs[0])}]",  # HP
+                f"[{iv_color(ivs[1])}]{ivs[1]}[/{iv_color(ivs[1])}]",  # Attack
+                f"[{iv_color(ivs[2])}]{ivs[2]}[/{iv_color(ivs[2])}]",  # Defense
+                f"[{iv_color(ivs[3])}]{ivs[3]}[/{iv_color(ivs[3])}]",  # Speed
+                f"[{iv_color(ivs[4])}]{ivs[4]}[/{iv_color(ivs[4])}]",  # Sp.Attack
+                f"[{iv_color(ivs[5])}]{ivs[5]}[/{iv_color(ivs[5])}]",  # Sp.Defense
+                f"[{total_iv_color(total_ivs)}]{total_ivs}[/{total_iv_color(total_ivs)}]"  # Total IVs
+            )
             
             # Combine tables into columns
             left_column = Columns([info_table, stats_table], equal=True)
