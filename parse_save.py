@@ -26,58 +26,48 @@ MAX_PARTY_SIZE = 6
 # Default paths and offsets
 DEFAULT_SAVE_PATH = "./save/player1.sav"
 
-# Pokémon character encoding map
-POKEMON_CHAR_MAP: Dict[int, str] = {
-    0x00: " ", 0x01: "À", 0x02: "Á", 0x03: "Â", 0x04: "Ç", 0x05: "È", 0x06: "É", 0x07: "Ê",
-    0x08: "Ë", 0x09: "Ì", 0x0B: "Î", 0x0C: "Ï", 0x0D: "Ò", 0x0E: "Ó", 0x0F: "Ô",
-    0x10: "Œ", 0x11: "Ù", 0x12: "Ú", 0x13: "Û", 0x14: "Ñ", 0x15: "ß", 0x16: "à", 0x17: "á",
-    0x19: "ç", 0x1A: "è", 0x1B: "é", 0x1C: "ê", 0x1D: "ë", 0x1E: "ì", 0x20: "î",
-    0x21: "ï", 0x22: "ò", 0x23: "ó", 0x24: "ô", 0x25: "œ", 0x26: "ù", 0x27: "ú", 0x28: "û",
-    0x29: "ñ", 0x2A: "º", 0x2B: "ª", 0x2D: "&", 0x2E: "+", 0x34: "[", 0x35: "]",
-    0x51: "poke", 0x52: "POKE", 0x53: "block", 0x54: "BLOCK",
-    0x5A: "Í", 0x5B: "%", 0x5C: "(", 0x5D: ")",
-    0x79: "'", 0x7A: "'", 0x7B: "\"", 0x7C: "\"",
-    0x85: "<...>", 0xA1: "0", 0xA2: "1", 0xA3: "2", 0xA4: "3", 0xA5: "4",
-    0xA6: "5", 0xA7: "6", 0xA8: "7", 0xA9: "8", 0xAA: "9",
-    0xAB: "!", 0xAC: "?", 0xAD: ".", 0xAE: "-", 0xAF: "·", 0xB0: "...", 0xB1: "«", 0xB2: "»",
-    0xB3: "'", 0xB4: "'", 0xB5: "♂", 0xB6: "♀", 0xB7: "money", 0xB8: ",", 0xB9: "x", 0xBA: "/",
-    0xBB: "A", 0xBC: "B", 0xBD: "C", 0xBE: "D", 0xBF: "E", 0xC0: "F", 0xC1: "G", 0xC2: "H", 0xC3: "I",
-    0xC4: "J", 0xC5: "K", 0xC6: "L", 0xC7: "M", 0xC8: "N", 0xC9: "O", 0xCA: "P", 0xCB: "Q", 0xCC: "R",
-    0xCD: "S", 0xCE: "T", 0xCF: "U", 0xD0: "V", 0xD1: "W", 0xD2: "X", 0xD3: "Y", 0xD4: "Z",
-    0xD5: "a", 0xD6: "b", 0xD7: "c", 0xD8: "d", 0xD9: "e", 0xDA: "f", 0xDB: "g", 0xDC: "h", 0xDD: "i",
-    0xDE: "j", 0xDF: "k", 0xE0: "l", 0xE1: "m", 0xE2: "n", 0xE3: "o", 0xE4: "p", 0xE5: "q", 0xE6: "r",
-    0xE7: "s", 0xE8: "t", 0xE9: "u", 0xEA: "v", 0xEB: "w", 0xEC: "x", 0xED: "y", 0xEE: "z",
-    0xFF: " "
-}
+# Simple JSON data loading functions
+_move_data: Dict[int, str] = {}
+_species_data: Dict[int, str] = {}
+_char_map: Dict[int, str] = {}
+_nature_data: Dict[int, str] = {}
 
-# Pokémon nature map
-POKEMON_NATURE_MAP: Dict[int, str] = {
-    0: "Hardy",
-    1: "Lonely",
-    2: "Brave",
-    3: "Adamant",
-    4: "Naughty",
-    5: "Bold",
-    6: "Docile",
-    7: "Relaxed",
-    8: "Impish",
-    9: "Lax",
-    10: "Timid",
-    11: "Hasty",
-    12: "Serious",
-    13: "Jolly",
-    14: "Naive",
-    15: "Modest",
-    16: "Mild",
-    17: "Quiet",
-    18: "Bashful",
-    19: "Rash",
-    20: "Calm",
-    21: "Gentle",
-    22: "Sassy",
-    23: "Careful",
-    24: "Quirky"
-}
+def _load_pokemon_data():
+    """Load Pokemon data from JSON files"""
+    global _move_data, _species_data, _char_map, _nature_data
+    
+    for filename, data_dict in [
+        ("pokemon_moves.json", "_move_data"), 
+        ("pokemon_species.json", "_species_data"),
+        ("pokemon_charmap.json", "_char_map"),
+        ("pokemon_natures.json", "_nature_data")
+    ]:
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                globals()[data_dict] = {int(k): v for k, v in json.load(f).items()}
+        except FileNotFoundError:
+            pass  # File doesn't exist, keep empty dict
+        except Exception as e:
+            print(f"[WARNING] Could not load {filename}: {e}")
+
+# Load data once at module import time
+_load_pokemon_data()
+
+def get_move_name(move_id: int) -> str:
+    """Get move name by ID"""
+    return _move_data.get(move_id, f"Move {move_id}")
+
+def get_species_name(species_id: int) -> str:
+    """Get species name by ID"""
+    return _species_data.get(species_id, f"Species {species_id}")
+
+def get_char_map() -> Dict[int, str]:
+    """Get the loaded character map"""
+    return _char_map
+
+def get_nature_name(nature_id: int) -> str:
+    """Get nature name by ID"""
+    return _nature_data.get(nature_id, f"Nature {nature_id}")
 
 
 class SaveBlock2(ctypes.Structure):
@@ -91,51 +81,102 @@ class SaveBlock2(ctypes.Structure):
     ]
 
 
+class PokemonSubstruct0(ctypes.Structure):
+    """Growth data substruct (12 bytes)"""
+    _pack_ = 1
+    _fields_ = [
+        ("species", ctypes.c_uint16),       # 0x00 - Species ID
+        ("heldItem", ctypes.c_uint16),      # 0x02 - Held item
+        ("experience", ctypes.c_uint32),    # 0x04 - Experience points
+        ("ppBonuses", ctypes.c_uint8),      # 0x08 - PP bonuses
+        ("friendship", ctypes.c_uint8),     # 0x09 - Friendship
+        ("unknown", ctypes.c_uint16),       # 0x0A - Unknown/padding
+    ]
+
+
+class PokemonSubstruct1(ctypes.Structure):
+    """Moves data substruct (12 bytes)"""
+    _pack_ = 1
+    _fields_ = [
+        ("move1", ctypes.c_uint16),         # 0x00 - Move 1
+        ("move2", ctypes.c_uint16),         # 0x02 - Move 2
+        ("move3", ctypes.c_uint16),         # 0x04 - Move 3
+        ("move4", ctypes.c_uint16),         # 0x06 - Move 4
+        ("pp1", ctypes.c_uint8),            # 0x08 - PP for move 1
+        ("pp2", ctypes.c_uint8),            # 0x09 - PP for move 2
+        ("pp3", ctypes.c_uint8),            # 0x0A - PP for move 3
+        ("pp4", ctypes.c_uint8),            # 0x0B - PP for move 4
+    ]
+
+
+class PokemonSubstruct2(ctypes.Structure):
+    """EVs and Contest stats substruct (12 bytes)"""
+    _pack_ = 1
+    _fields_ = [
+        ("hpEV", ctypes.c_uint8),           # 0x00 - HP EV
+        ("attackEV", ctypes.c_uint8),       # 0x01 - Attack EV
+        ("defenseEV", ctypes.c_uint8),      # 0x02 - Defense EV
+        ("speedEV", ctypes.c_uint8),        # 0x03 - Speed EV
+        ("spAttackEV", ctypes.c_uint8),     # 0x04 - Special Attack EV
+        ("spDefenseEV", ctypes.c_uint8),    # 0x05 - Special Defense EV
+        ("cool", ctypes.c_uint8),           # 0x06 - Cool contest stat
+        ("beauty", ctypes.c_uint8),         # 0x07 - Beauty contest stat
+        ("cute", ctypes.c_uint8),           # 0x08 - Cute contest stat
+        ("smart", ctypes.c_uint8),          # 0x09 - Smart contest stat
+        ("tough", ctypes.c_uint8),          # 0x0A - Tough contest stat
+        ("sheen", ctypes.c_uint8),          # 0x0B - Sheen
+    ]
+
+
+class PokemonSubstruct3(ctypes.Structure):
+    """Misc data substruct (12 bytes)"""
+    _pack_ = 1
+    _fields_ = [
+        ("pokerus", ctypes.c_uint8),        # 0x00 - Pokerus
+        ("metLocation", ctypes.c_uint8),    # 0x01 - Met location
+        ("metLevelAndInfo", ctypes.c_uint16), # 0x02 - Met level and other info
+        ("ivData", ctypes.c_uint32),        # 0x04 - IVs packed in 32-bit value
+        ("ribbonsAndAbility", ctypes.c_uint32), # 0x08 - Ribbons and ability data
+    ]
+
+
 class PokemonData(ctypes.Structure):
     """
     Pokemon data structure for Pokemon Quetzal rom hack (104 bytes total).
     
-    This structure represents both the box data (80 bytes) and party data (24 bytes).
-    Current HP verified at offset 0x1B through user testing.
-    Stats (attack, defense, speed, sp.atk, sp.def, max HP) are 16-bit integers.
-    There are most likely additional fields added for Quetzal's extended features.
+    Based on actual data analysis of the save file format.
+    This structure has been reverse-engineered from working save data.
     """
     _pack_ = 1
     _fields_ = [
-        # BoxPokemon-like data (first 80 bytes) - but with differences from standard pokeemerald
-        # ("personality", ctypes.c_uint32),  # 0x00 - Personality value (32-bit)
-        ("nature", ctypes.c_uint8),  # 0x00 - Personality value (32-bit)
-        ("shinyType", ctypes.c_uint8),  # 0x01 - Shiny type (0 = normal, 1 = shiny, 2 = alternate shiny
-        ("unknown_02", ctypes.c_uint8),  # 0x02 - Unknown data (2 bytes
-        ("unknown_04", ctypes.c_uint8),  # 0x04 - Unknown data (4 bytes, possibly flags or additional info)
-        ("otId", ctypes.c_uint32),          # 0x00 - Original Trainer ID (32-bit)
-        ("nickname", ctypes.c_uint8 * VANILLA_POKEMON_NAME_LENGTH),      # 0x00 - Pokemon nickname (18 bytes in this format)
-        ("unknown_0A", ctypes.c_uint8 * 2),     # 0x0A - Unknown data (2 bytes)
-        ("otName", ctypes.c_uint8 * PLAYER_NAME_LENGTH),      # 0x0C - Original Trainer name (7 bytes)
-        ("unknown_12", ctypes.c_uint8 * 5),     # 0x12 - Language, flags, and other packed data
-        ("unknown_18", ctypes.c_uint8 * 3),     # 0x18 - Unknown data
-        ("currentHp", ctypes.c_uint8),          # 0x1B - Current HP ✓ VERIFIED
-        ("unknown_1C", ctypes.c_uint8 * 4),     # 0x1C - Unknown data
-        ("species_id", ctypes.c_uint16),        # 0x20 - Species ID (unencrypted, 16-bit)
-        ("heldItem", ctypes.c_uint16),          # 0x22 - Held item ID (16-bit)
-        ("unknown_24", ctypes.c_uint8 * 44),    # 0x24 - Encrypted Pokemon data (moves, IVs, etc.)
-                                                # Note: Quetzal may have additional features stored here
-                                                # such as extended movesets, new abilities, forms, etc.
-                                                # This contains 4 substructures of 12 bytes each:
-                                                # - Substruct0: Species, item, experience, friendship
-                                                # - Substruct1: Moves and PP
-                                                # - Substruct2: EVs and Contest stats (6 EVs + 6 contest)
-                                                # - Substruct3: IVs, ribbons, and other flags
+        # Box Pokemon data - first part
+        ("personality", ctypes.c_uint32),       # 0x00 - Personality value (32-bit)
+        ("otId", ctypes.c_uint32),              # 0x04 - Original Trainer ID (32-bit)
+        ("nickname", ctypes.c_uint8 * VANILLA_POKEMON_NAME_LENGTH),    # 0x08 - Pokemon nickname (10 bytes)
+        ("language", ctypes.c_uint8),           # 0x12 - Language
+        ("unknown_13", ctypes.c_uint8),         # 0x13 - Unknown data (1 byte)
+        ("otName", ctypes.c_uint8 * PLAYER_NAME_LENGTH),  # 0x14 - OT Name (7 bytes) ✓ VERIFIED
+        ("markings", ctypes.c_uint8),           # 0x1B - Markings
+        ("checksum", ctypes.c_uint16),          # 0x1C - Checksum
+        ("hpLost", ctypes.c_uint16),            # 0x1E - HP lost
+        ("unknown_20", ctypes.c_uint8 * 3),     # 0x20 - Unknown data (3 bytes)
+        ("actualCurrentHp", ctypes.c_uint16),   # 0x23 - Actual current HP ✓ VERIFIED
+        ("unknown_25", ctypes.c_uint8 * 3),     # 0x25 - Unknown data (3 bytes)
+        ("species_id", ctypes.c_uint16),        # 0x28 - Species ID ✓ VERIFIED at offset 40
+        ("unknown_2A", ctypes.c_uint8 * 42),    # 0x2A - Unknown/encrypted data (42 bytes)
         
-        # Party-specific data (24 bytes) - starts at offset 0x50
-        ("level", ctypes.c_uint8),              # 0x50 - Pokemon level
-        ("status", ctypes.c_uint8),             # 0x51 - Status condition
-        ("maxHp", ctypes.c_uint16),             # 0x52 - Maximum HP (16-bit)
-        ("attack", ctypes.c_uint16),            # 0x54 - Attack stat (16-bit)
-        ("defense", ctypes.c_uint16),           # 0x56 - Defense stat (16-bit)
-        ("speed", ctypes.c_uint16),             # 0x58 - Speed stat (16-bit)
-        ("spAttack", ctypes.c_uint16),          # 0x5A - Special Attack stat (16-bit)
-        ("spDefense", ctypes.c_uint16),         # 0x5C - Special Defense stat (16-bit)
+        # Party-specific data starts around 0x54
+        ("currentHp", ctypes.c_uint16),         # 0x54 - Current HP (0 for fainted, needs calculation for healthy)
+        ("unknown_56", ctypes.c_uint8 * 2),     # 0x56 - Unknown (2 bytes)
+        ("level", ctypes.c_uint8),              # 0x58 - Pokemon level ✓ VERIFIED at offset 88
+        ("unknown_59", ctypes.c_uint8),         # 0x59 - Unknown (1 byte)
+        ("maxHp", ctypes.c_uint16),             # 0x5A - Max HP ✓ VERIFIED at offset 90
+        ("attack", ctypes.c_uint16),            # 0x5C - Attack ✓ VERIFIED at offset 92
+        ("defense", ctypes.c_uint16),           # 0x5E - Defense ✓ VERIFIED at offset 94
+        ("speed", ctypes.c_uint16),             # 0x60 - Speed ✓ VERIFIED at offset 96
+        ("spAttack", ctypes.c_uint16),          # 0x62 - Sp.Attack ✓ VERIFIED at offset 98
+        ("spDefense", ctypes.c_uint16),         # 0x64 - Sp.Defense ✓ VERIFIED at offset 100
+        ("unknown_66", ctypes.c_uint8 * 2),     # 0x66 - Unknown (2 bytes to reach 104 total)
     ]
     
     # Type annotation for raw_bytes attribute that gets added dynamically
@@ -143,10 +184,15 @@ class PokemonData(ctypes.Structure):
     
     @property
     def nature_str(self) -> str:
-        # The nature field may be out of range, so mod by 25
-        index = self.nature % 25
-        return POKEMON_NATURE_MAP.get(index, f"Unknown({self.nature})")
+        # Nature is derived from personality value mod 25
+        nature_index = self.personality % 25
+        return get_nature_name(nature_index)
     
+    @property
+    def otName_str(self) -> str:
+        # Decode the OT name from the structure data
+        return PokemonSaveParser.decode_pokemon_string(bytes(self.otName))
+
     @property
     def otId_str(self) -> str:
         # Returns the lower 16 bits of otId as a zero-padded 5-digit string
@@ -156,11 +202,128 @@ class PokemonData(ctypes.Structure):
     def nickname_str(self) -> str:
         # Decode the nickname bytes to a string
         return PokemonSaveParser.decode_pokemon_string(bytes(self.nickname))
+
+    @property
+    def species_name(self) -> str:
+        """Get the species name for this Pokemon"""
+        return get_species_name(self.species_id)
+
+    @property
+    def effective_current_hp(self) -> int:
+        """
+        Return the actual current HP.
+        The correct current HP is stored at offset 0x23 (actualCurrentHp field).
+        """
+        return self.actualCurrentHp
+
+    def decrypt_substruct_data(self) -> bytes:
+        """
+        Decrypt the Pokemon substruct data using the same algorithm as the C code.
+        Returns 48 bytes of decrypted substruct data (4 substructs * 12 bytes each).
+        """
+        if not hasattr(self, 'raw_bytes') or len(self.raw_bytes) < 0x48:
+            return b'\x00' * 48
+        
+        # Extract the encrypted substruct area (48 bytes starting at offset 0x20)
+        # This corresponds to the 'secure' union in the C code
+        encrypted_data = self.raw_bytes[0x20:0x20 + 48]
+        if len(encrypted_data) < 48:
+            return b'\x00' * 48
+        
+        # Convert to 32-bit words for decryption (12 words total)
+        encrypted_words = struct.unpack('<12I', encrypted_data)
+        
+        # Decrypt using the same algorithm as DecryptBoxMon in pokemon.c
+        decrypted_words = []
+        for word in encrypted_words:
+            # First XOR with otId, then with personality (reverse of encryption)
+            word ^= self.otId
+            word ^= self.personality
+            decrypted_words.append(word)
+        
+        return struct.pack('<12I', *decrypted_words)
+    
+    def get_substruct_order(self) -> List[int]:
+        """
+        Get the substruct order based on personality value.
+        Returns list of 4 indices representing the order [0,1,2,3] should be read.
+        Based on the SUBSTRUCT_CASE logic in pokemon.c
+        """
+        order_table = [
+            [0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3], [0, 3, 1, 2],
+            [0, 2, 3, 1], [0, 3, 2, 1], [1, 0, 2, 3], [1, 0, 3, 2],
+            [2, 0, 1, 3], [3, 0, 1, 2], [2, 0, 3, 1], [3, 0, 2, 1],
+            [1, 2, 0, 3], [1, 3, 0, 2], [2, 1, 0, 3], [3, 1, 0, 2],
+            [2, 3, 0, 1], [3, 2, 0, 1], [1, 2, 3, 0], [1, 3, 2, 0],
+            [2, 1, 3, 0], [3, 1, 2, 0], [2, 3, 1, 0], [3, 2, 1, 0]
+        ]
+        return order_table[self.personality % 24]
+    
+    def get_substruct(self, substruct_type: int) -> Optional[bytes]:
+        """
+        Get the decrypted data for a specific substruct type (0-3).
+        Returns 12 bytes of substruct data.
+        """
+        if not (0 <= substruct_type <= 3):
+            return None
+        
+        decrypted_data = self.decrypt_substruct_data()
+        if len(decrypted_data) < 48:
+            return None
+        
+        # Get the actual position of this substruct type based on personality
+        order = self.get_substruct_order()
+        try:
+            substruct_index = order.index(substruct_type)
+        except ValueError:
+            return None
+        
+        start_offset = substruct_index * 12
+        return decrypted_data[start_offset:start_offset + 12]
     
     @property
-    def otName_str(self) -> str:
-        # Decode the original trainer name bytes to a string
-        return PokemonSaveParser.decode_pokemon_string(bytes(self.otName))
+    def moves_from_substruct(self) -> List[int]:
+        """
+        Extract moves from party Pokemon data.
+        For party Pokemon, moves are stored in unencrypted area starting at offset 0x34.
+        """
+        if not hasattr(self, 'raw_bytes') or len(self.raw_bytes) < 0x3E:
+            return [0, 0, 0, 0]
+        
+        try:
+            # Moves are stored as 16-bit values in party Pokemon data (unencrypted)
+            # at offsets 0x34, 0x36, 0x38, 0x3A
+            moves = []
+            for i in range(4):
+                offset = 0x34 + (i * 2)
+                if offset + 1 < len(self.raw_bytes):
+                    move_id = struct.unpack('<H', self.raw_bytes[offset:offset+2])[0]
+                    # Validate move ID range
+                    if 0 <= move_id <= 1000:
+                        moves.append(move_id)
+                    else:
+                        moves.append(0)
+                else:
+                    moves.append(0)
+            return moves
+        except (struct.error, IndexError):
+            return [0, 0, 0, 0]
+    
+    @property
+    def move_names(self) -> List[str]:
+        """
+        Get the move names for this Pokemon's current moves.
+        """
+        moves = self.moves_from_substruct
+        names = []
+        for move_id in moves:
+            if move_id == 0:
+                names.append("---")
+            else:
+                # Use the data loader for better move names
+                move_name = get_move_name(move_id)
+                names.append(move_name)
+        return names
 
 
 class SectorInfo(NamedTuple):
@@ -197,10 +360,11 @@ class PokemonSaveParser:
     @staticmethod
     def decode_pokemon_string(encoded_bytes: bytes) -> str:
         result = ""
+        char_map = get_char_map()
         for byte in encoded_bytes:
             if byte == 0xFF:  # Terminator
                 break
-            result += POKEMON_CHAR_MAP.get(byte, "?")
+            result += char_map.get(byte, "?")
         return result
 
     def get_sector_info(self, sector_index: int) -> SectorInfo:
@@ -301,8 +465,8 @@ class PokemonSaveParser:
         self.build_sector_map()
         saveblock1_data = self.extract_saveblock1()
         saveblock2_data = self.extract_saveblock2()
-        party_pokemon = self.parse_party_pokemon(saveblock1_data)
         player_name = self.parse_player_name(saveblock2_data)
+        party_pokemon = self.parse_party_pokemon(saveblock1_data)
         play_time = self.parse_play_time(saveblock2_data)
         return {
             'party_pokemon': party_pokemon,
@@ -320,41 +484,41 @@ class PokemonSaveParser:
             return
         header = (
             f"{'Slot':<5}"
-            f"{'Nature':<12}"
-            f"{'Nickname':<12}"
-            f"{'OT Name':<10}"
-            f"{'IDNo':<7}"
             f"{'Dex ID':<8}"
+            f"{'Nickname':<12}"
             f"{'Lv':<4}"
+            f"{'Nature':<10}"
             f"{'HP':<30} "
             f"{'Atk':<5}"
             f"{'Def':<5}"
             f"{'Spe':<5}"
             f"{'SpA':<5}"
             f"{'SpD':<5}"
+            f"{'OT Name':<10}"
+            f"{'IDNo':<7}"
         )
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
-            hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
+            hp_percent = (pokemon.effective_current_hp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
-            hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
+            hp_display = f"[{hp_bar}] {pokemon.effective_current_hp}/{pokemon.maxHp}"
             print(
                 f"{slot:<5}"
-                f"{pokemon.nature_str:<12}"
-                f"{pokemon.nickname_str:<12}"
-                f"{pokemon.otName_str:<10}"
-                f"{pokemon.otId_str:<7}"
                 f"{pokemon.species_id:<8}"
+                f"{pokemon.nickname_str:<12}"
                 f"{pokemon.level:<4}"
+                f"{pokemon.nature_str:<10}"
                 f"{hp_display:<30} "
                 f"{pokemon.attack:<5}"
                 f"{pokemon.defense:<5}"
                 f"{pokemon.speed:<5}"
                 f"{pokemon.spAttack:<5}"
                 f"{pokemon.spDefense:<5}"
+                f"{pokemon.otName_str:<10}"
+                f"{pokemon.otId_str:<7}"
             )
 
     @staticmethod
@@ -382,6 +546,26 @@ class PokemonSaveParser:
             print(f"\n--- Slot {slot}: {nickname} ---")
             # Use the raw bytes stored during parsing
             print(' '.join(f'{b:02x}' for b in pokemon.raw_bytes))
+            
+            # Debug substruct data
+            print(f"\nPersonality: 0x{pokemon.personality:08x}")
+            print(f"OT ID: 0x{pokemon.otId:08x}")
+            
+            # Show decrypted substruct data
+            decrypted_data = pokemon.decrypt_substruct_data()
+            print(f"Decrypted substruct data ({len(decrypted_data)} bytes):")
+            for i in range(0, len(decrypted_data), 12):
+                substruct_chunk = decrypted_data[i:i+12]
+                hex_str = ' '.join(f'{b:02x}' for b in substruct_chunk)
+                print(f"  Substruct {i//12}: {hex_str}")
+            
+            # Show substruct order
+            order = pokemon.get_substruct_order()
+            print(f"Substruct order: {order}")
+            
+            # Show moves analysis
+            moves = pokemon.moves_from_substruct
+            print(f"Extracted moves: {moves}")
 
     @staticmethod
     def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
