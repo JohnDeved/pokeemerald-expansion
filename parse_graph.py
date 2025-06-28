@@ -104,6 +104,7 @@ def main() -> None:
         ("nickname", 8, 10),
         ("otName", 0x14, 7),
         ("c.HP", 0x23, 2),
+        ("status", 0x25, 1),
         ("sp.Id", 0x28, 2),
         ("item", 0x2A, 2),
         ("moves", 0x34, 0x3F-0x34),
@@ -111,11 +112,11 @@ def main() -> None:
         ("IV", 0x40+16, 4),
         ("lv", 0x58, 1),
         ("HP", 0x5A, 2),
-        ("ATK", 0x5C, 2),
-        ("DEF", 0x5E, 2),
-        ("SPD", 0x60, 2),
-        ("SPA", 0x62, 2),
-        ("SPD", 0x64, 2),
+        ("Atk", 0x5C, 2),
+        ("Def", 0x5E, 2),
+        ("S.Def", 0x60, 2),
+        ("S.Atk", 0x62, 2),
+        ("Speed", 0x64, 2),
     ]
     
     for slot, pokemon in enumerate(save_data['party_pokemon'], 1):
