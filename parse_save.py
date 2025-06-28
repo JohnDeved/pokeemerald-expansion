@@ -8,6 +8,13 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, NamedTuple, Any
 
+# Rich imports for beautiful terminal output
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.columns import Columns
+from rich import box
+
 # Save file structure constants
 SECTOR_SIZE = 4096
 SECTOR_DATA_SIZE = 3968
@@ -163,7 +170,19 @@ class PokemonData(ctypes.Structure):
         ("actualCurrentHp", ctypes.c_uint16),   # 0x23 - Actual current HP ✓ VERIFIED
         ("unknown_25", ctypes.c_uint8 * 3),     # 0x25 - Unknown data (3 bytes)
         ("species_id", ctypes.c_uint16),        # 0x28 - Species ID ✓ VERIFIED at offset 40
-        ("unknown_2A", ctypes.c_uint8 * 42),    # 0x2A - Unknown/encrypted data (42 bytes)
+        ("unknown_2A", ctypes.c_uint8 * 10),    # 0x2A - Unknown/encrypted data (10 bytes)
+        
+        # Move data (unencrypted in party Pokemon) - 0x34-0x3F
+        ("move1", ctypes.c_uint16),             # 0x34 - Move 1 ID
+        ("move2", ctypes.c_uint16),             # 0x36 - Move 2 ID  
+        ("move3", ctypes.c_uint16),             # 0x38 - Move 3 ID
+        ("move4", ctypes.c_uint16),             # 0x3A - Move 4 ID
+        ("pp1", ctypes.c_uint8),                # 0x3C - PP for move 1
+        ("pp2", ctypes.c_uint8),                # 0x3D - PP for move 2
+        ("pp3", ctypes.c_uint8),                # 0x3E - PP for move 3
+        ("pp4", ctypes.c_uint8),                # 0x3F - PP for move 4
+        
+        ("unknown_40", ctypes.c_uint8 * 20),    # 0x40 - Unknown/encrypted data (20 bytes)
         
         # Party-specific data starts around 0x54
         ("currentHp", ctypes.c_uint16),         # 0x54 - Current HP (0 for fainted, needs calculation for healthy)
@@ -282,39 +301,27 @@ class PokemonData(ctypes.Structure):
         return decrypted_data[start_offset:start_offset + 12]
     
     @property
+    def moves(self) -> List[int]:
+        """
+        Get the move IDs for this Pokemon.
+        Moves are stored directly in the structure fields.
+        """
+        return [self.move1, self.move2, self.move3, self.move4]
+    
+    @property
     def moves_from_substruct(self) -> List[int]:
         """
-        Extract moves from party Pokemon data.
-        For party Pokemon, moves are stored in unencrypted area starting at offset 0x34.
+        Legacy method for backward compatibility.
+        Now delegates to the new moves property.
         """
-        if not hasattr(self, 'raw_bytes') or len(self.raw_bytes) < 0x3E:
-            return [0, 0, 0, 0]
-        
-        try:
-            # Moves are stored as 16-bit values in party Pokemon data (unencrypted)
-            # at offsets 0x34, 0x36, 0x38, 0x3A
-            moves = []
-            for i in range(4):
-                offset = 0x34 + (i * 2)
-                if offset + 1 < len(self.raw_bytes):
-                    move_id = struct.unpack('<H', self.raw_bytes[offset:offset+2])[0]
-                    # Validate move ID range
-                    if 0 <= move_id <= 1000:
-                        moves.append(move_id)
-                    else:
-                        moves.append(0)
-                else:
-                    moves.append(0)
-            return moves
-        except (struct.error, IndexError):
-            return [0, 0, 0, 0]
+        return self.moves
     
     @property
     def move_names(self) -> List[str]:
         """
         Get the move names for this Pokemon's current moves.
         """
-        moves = self.moves_from_substruct
+        moves = self.moves
         names = []
         for move_id in moves:
             if move_id == 0:
@@ -324,6 +331,15 @@ class PokemonData(ctypes.Structure):
                 move_name = get_move_name(move_id)
                 names.append(move_name)
         return names
+
+    @property
+    def pp_values(self) -> List[int]:
+        """
+        Get the PP values for the Pokemon's moves.
+        PP values are stored directly in the structure fields.
+        """
+        return [self.pp1, self.pp2, self.pp3, self.pp4]
+    
 
 
 class SectorInfo(NamedTuple):
@@ -563,9 +579,14 @@ class PokemonSaveParser:
             order = pokemon.get_substruct_order()
             print(f"Substruct order: {order}")
             
-            # Show moves analysis
+            # Show moves and PP from structure fields
+            print(f"Moves from structure: {pokemon.moves}")
+            print(f"Move names: {pokemon.move_names}")
+            print(f"PP values: {pokemon.pp_values}")
+            
+            # Show moves analysis for comparison
             moves = pokemon.moves_from_substruct
-            print(f"Extracted moves: {moves}")
+            print(f"Extracted moves (legacy): {moves}")
 
     @staticmethod
     def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
@@ -586,6 +607,9 @@ class PokemonSaveParser:
                     
         data['displayOtId'] = pokemon.otId_str
         data['displayNature'] = pokemon.nature_str
+        data['moves'] = pokemon.moves
+        data['moveNames'] = pokemon.move_names
+        data['ppValues'] = pokemon.pp_values
         return data
 
     @staticmethod
@@ -603,6 +627,143 @@ class PokemonSaveParser:
         }
         print(json.dumps(json_output))
 
+    @staticmethod
+    def display_party_pokemon_detailed(party_pokemon: List[PokemonData]) -> None:
+        """Display party pokemon using rich formatting for beautiful output"""
+        console = Console()
+        
+        if not party_pokemon:
+            console.print(Panel("No Pokémon found in party.", title="Party", style="red"))
+            return
+        
+        # Create main layout
+        console.print("\n")
+        console.print(Panel.fit("🎮 POKÉMON PARTY SUMMARY 🎮", style="bold magenta"))
+        
+        for slot, pokemon in enumerate(party_pokemon, 1):
+            # Create individual pokemon panel
+            
+            # HP Bar
+            hp_percent = (pokemon.effective_current_hp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
+            if pokemon.effective_current_hp == 0:
+                hp_status = "[red]FAINTED[/red]"
+            else:
+                hp_status = "[green]HEALTHY[/green]"
+            
+            # Basic info table
+            info_table = Table(show_header=False, box=box.SIMPLE)
+            info_table.add_column("Field", style="cyan")
+            info_table.add_column("Value", style="white")
+            
+            info_table.add_row("Species", f"{pokemon.species_name} (#{pokemon.species_id})")
+            info_table.add_row("Level", f"{pokemon.level}")
+            info_table.add_row("Nature", f"[bold]{pokemon.nature_str}[/bold]")
+            info_table.add_row("Trainer", f"{pokemon.otName_str} (ID: {pokemon.otId_str})")
+            info_table.add_row("HP", f"{pokemon.effective_current_hp}/{pokemon.maxHp} {hp_status}")
+            
+            # Stats table
+            stats_table = Table(title="Base Stats", box=box.ROUNDED)
+            stats_table.add_column("Stat", style="cyan")
+            stats_table.add_column("Value", justify="right", style="yellow")
+            
+            stats_table.add_row("Attack", f"{pokemon.attack}")
+            stats_table.add_row("Defense", f"{pokemon.defense}")
+            stats_table.add_row("Speed", f"{pokemon.speed}")
+            stats_table.add_row("Sp.Atk", f"{pokemon.spAttack}")
+            stats_table.add_row("Sp.Defense", f"{pokemon.spDefense}")
+            
+            # Moves table
+            moves_table = Table(title="Moves", box=box.ROUNDED)
+            moves_table.add_column("#", width=3)
+            moves_table.add_column("Move", style="green")
+            moves_table.add_column("PP", justify="center", style="yellow")
+            moves_table.add_column("ID", justify="right", style="dim")
+            
+            moves = pokemon.moves_from_substruct
+            move_names = pokemon.move_names
+            pp_values = pokemon.pp_values
+            for i, (move_id, move_name, pp) in enumerate(zip(moves, move_names, pp_values), 1):
+                if move_id > 0:
+                    moves_table.add_row(f"{i}", move_name, f"{pp}", f"{move_id}")
+                else:
+                    moves_table.add_row(f"{i}", "[dim]---[/dim]", "[dim]---[/dim]", "[dim]---[/dim]")
+            
+            # EVs and IVs
+            ev_substruct = pokemon.get_substruct(2)
+            iv_data_table = Table(title="Training Data", box=box.ROUNDED)
+            iv_data_table.add_column("Type", style="cyan")
+            iv_data_table.add_column("HP", justify="center")
+            iv_data_table.add_column("Atk", justify="center") 
+            iv_data_table.add_column("Def", justify="center")
+            iv_data_table.add_column("Spe", justify="center")
+            iv_data_table.add_column("SpA", justify="center")
+            iv_data_table.add_column("SpD", justify="center")
+            
+            if ev_substruct and len(ev_substruct) >= 6:
+                hp_ev = ev_substruct[0]
+                atk_ev = ev_substruct[1]
+                def_ev = ev_substruct[2]
+                spe_ev = ev_substruct[3]
+                spa_ev = ev_substruct[4]
+                spd_ev = ev_substruct[5]
+                total_evs = hp_ev + atk_ev + def_ev + spe_ev + spa_ev + spd_ev
+                
+                ev_style = "green" if total_evs <= 510 else "red"
+                iv_data_table.add_row(
+                    f"[{ev_style}]EVs[/{ev_style}]",
+                    f"[{ev_style}]{hp_ev}[/{ev_style}]",
+                    f"[{ev_style}]{atk_ev}[/{ev_style}]", 
+                    f"[{ev_style}]{def_ev}[/{ev_style}]",
+                    f"[{ev_style}]{spe_ev}[/{ev_style}]",
+                    f"[{ev_style}]{spa_ev}[/{ev_style}]",
+                    f"[{ev_style}]{spd_ev}[/{ev_style}]"
+                )
+            
+            # IVs
+            misc_substruct = pokemon.get_substruct(3)
+            if misc_substruct and len(misc_substruct) >= 8:
+                iv_data = struct.unpack('<I', misc_substruct[4:8])[0]
+                hp_iv = iv_data & 0x1F
+                atk_iv = (iv_data >> 5) & 0x1F
+                def_iv = (iv_data >> 10) & 0x1F
+                spe_iv = (iv_data >> 15) & 0x1F
+                spa_iv = (iv_data >> 20) & 0x1F
+                spd_iv = (iv_data >> 25) & 0x1F
+                
+                # Color code IVs (31 is perfect)
+                def iv_color(iv: int) -> str:
+                    if iv == 31:
+                        return "bright_green"
+                    elif iv >= 25:
+                        return "green" 
+                    elif iv >= 15:
+                        return "yellow"
+                    else:
+                        return "red"
+                
+                iv_data_table.add_row(
+                    "IVs",
+                    f"[{iv_color(hp_iv)}]{hp_iv}[/{iv_color(hp_iv)}]",
+                    f"[{iv_color(atk_iv)}]{atk_iv}[/{iv_color(atk_iv)}]",
+                    f"[{iv_color(def_iv)}]{def_iv}[/{iv_color(def_iv)}]", 
+                    f"[{iv_color(spe_iv)}]{spe_iv}[/{iv_color(spe_iv)}]",
+                    f"[{iv_color(spa_iv)}]{spa_iv}[/{iv_color(spa_iv)}]",
+                    f"[{iv_color(spd_iv)}]{spd_iv}[/{iv_color(spd_iv)}]"
+                )
+            
+            # Combine tables into columns
+            left_column = Columns([info_table, stats_table], equal=True)
+            right_column = Columns([moves_table, iv_data_table], equal=True)
+            
+            # Create the pokemon panel
+            pokemon_panel = Panel(
+                Columns([left_column, right_column], equal=True),
+                title=f"[bold]Slot {slot}: {pokemon.nickname_str.upper()}[/bold]",
+                border_style="blue"
+            )
+            
+            console.print(pokemon_panel)
+            console.print()
 
 def main() -> None:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -612,6 +773,7 @@ def main() -> None:
     parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH,
                         help='Path to the save file (default: ./save/player1.sav)')
     parser.add_argument('--debugParty', action='store_true', help='Display raw party pokemon bytes')
+    parser.add_argument('--detailed', action='store_true', help='Display detailed party pokemon information with rich formatting')
     parser.add_argument('--json', action='store_true', help='Return json instead of a human readable table')
     args = parser.parse_args()
     if args.save_file == DEFAULT_SAVE_PATH and len(sys.argv) == 1:
@@ -623,6 +785,8 @@ def main() -> None:
             PokemonSaveParser.display_json_output(save_data)
         elif args.debugParty:
             PokemonSaveParser.display_party_pokemon_raw(save_data['party_pokemon'])
+        elif args.detailed:
+            PokemonSaveParser.display_party_pokemon_detailed(save_data['party_pokemon'])
         else:
             PokemonSaveParser.display_save_info(save_data)
     except (FileNotFoundError, IOError, ValueError) as e:
