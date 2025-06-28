@@ -3,8 +3,14 @@
 ## Project Overview
 This project involves developing and refining a Python parser for Pokemon Quetzal ROM hack save files. The parser extracts party Pokemon data, player information, and other save file contents from the custom save format used by Pokemon Quetzal.
 
+## Important Baseline Check (Read Before Starting)
+**Currently, everything is working as expected.** Before making any changes, you must run the program once and carefully record all output values. If you later make changes and notice that any output values (for fields that were already present and working) have changed, you have broken something. Only values for new fields you add should change. If existing values change, you must investigate and fix the regression before proceeding further.
+
 ## Primary Objective
-Implement and validate the correct Pokemon data structure in `parse_save.py` based on the ground truth specifications provided in `docs/quetzal_party_pokemon_struct.md`. The current implementation has incorrect field mappings and needs to be corrected to match the documented 104-byte structure.
+Implement and validate the correct Pokemon data structure in `parse_save.py` based on the ground truth specifications provided further down. The current implementation has incorrect field mappings and needs to be corrected to match the documented 104-byte structure.
+
+## Important Development Practice
+**It is important to frequently test the program after making changes.** This ensures that the parser continues to work as expected and helps catch any new issues early, preventing the accumulation of undetected bugs. Avoid building on top of broken code, as this can make debugging much harder and lead to more complex problems down the line.
 
 ## Current Status
 - ✅ Basic save file loading and sector parsing works correctly
@@ -18,7 +24,7 @@ Implement and validate the correct Pokemon data structure in `parse_save.py` bas
 **Problem**: Current structure has incorrect field offsets and missing required fields.
 
 **Action Required**:
-- Replace the current `PokemonData` class with the correct 104-byte structure from `docs/quetzal_party_pokemon_struct.md`
+- find all the fields in the current `PokemonData` class with the correct 104-byte structure for the rom hack quetzal.
 - Implement proper field mappings:
   - 0x00-0x4E: Box Pokemon data (79 bytes)
   - 0x4F-0x67: Party-specific data (25 bytes)
@@ -68,7 +74,7 @@ Implement and validate the correct Pokemon data structure in `parse_save.py` bas
 - Add comprehensive docstrings and comments
 
 ### Validation Requirements
-- All byte offsets must match `docs/quetzal_party_pokemon_struct.md` exactly
+- All results must match the ground truth data provided further down exactly
 - Test parsing with actual save files from Pokemon Quetzal
 - Verify decoded strings use correct character encoding
 - Ensure stat calculations are accurate for party Pokemon
@@ -82,7 +88,7 @@ Implement and validate the correct Pokemon data structure in `parse_save.py` bas
 ## Development Workflow
 
 ### Step 1: Structure Analysis
-1. Read and understand `docs/quetzal_party_pokemon_struct.md` completely
+1. Read and understand the ground truth further down completely
 2. Compare current implementation against ground truth
 3. Document all discrepancies and missing fields
 
@@ -405,5 +411,26 @@ The corrected parser must produce output matching the above ground truth data ex
 
 ---
 
-## Work History & Updates
-*Keep this section updated with all changes made to the parser
+## Output Snapshot (Baseline as of 2025-06-28)
+*This is the current output of the parser. Use this as a reference: if any of these values change for fields that were already present, you have introduced a regression.*
+
+```
+python parse_save.py
+[INFO] No save file specified, using default: ./save/player1.sav
+Active save slot: 0
+Valid sectors found: 14
+
+--- Party Pokémon Summary ---
+Slot Nature      Nickname    OT Name   IDNo   Dex ID  Lv  HP                             Atk  Def  Spe  SpA  SpD  
+------------------------------------------------------------------------------------------------------------------
+1    Adamant     Steelix     John      08202  208     44  [░░░░░░░░░░░░░░░░░░░░] 0/131   102  185  63   54   68   
+2    Rash        Breloom     John      08202  286     45  [████████████████████] 126/126 140  93   86   69   63   
+3    Impish      Snorlax     John      08202  143     47  [████████████████████] 248/248 128  114  33   62   122  
+4    Hasty       Ludicolo    John      08202  272     45  [████████████████████] 135/135 91   85   101  94   107  
+5    Sassy       Rayquaza    John      08202  6       41  [████████████████████] 132/132 90   87   99   108  93   
+6    Bold        Sigilyph    John      08202  561     37  [████████████████████] 114/114 62   77   107  85   67   
+
+--- SaveBlock2 Data ---
+Player Name: John
+Play Time: 44h 23m 29s
+```
