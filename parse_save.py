@@ -167,7 +167,7 @@ class PokemonData(ctypes.Structure):
         ("checksum", ctypes.c_uint16),          # 0x1C - Checksum
         ("hpLost", ctypes.c_uint16),            # 0x1E - HP lost
         ("unknown_20", ctypes.c_uint8 * 3),     # 0x20 - Unknown data (3 bytes)
-        ("actualCurrentHp", ctypes.c_uint16),   # 0x23 - Actual current HP ✓ VERIFIED
+        ("currentHp", ctypes.c_uint16),         # 0x23 - Current HP ✓ VERIFIED
         ("unknown_25", ctypes.c_uint8 * 3),     # 0x25 - Unknown data (3 bytes)
         ("species_id", ctypes.c_uint16),        # 0x28 - Species ID ✓ VERIFIED at offset 40
         ("unknown_2A", ctypes.c_uint8 * 10),    # 0x2A - Unknown/encrypted data (10 bytes)
@@ -185,7 +185,7 @@ class PokemonData(ctypes.Structure):
         ("unknown_40", ctypes.c_uint8 * 20),    # 0x40 - Unknown/encrypted data (20 bytes)
         
         # Party-specific data starts around 0x54
-        ("currentHp", ctypes.c_uint16),         # 0x54 - Current HP (0 for fainted, needs calculation for healthy)
+        ("unknown_54", ctypes.c_uint16),        # 0x54 - Unknown data (2 bytes)
         ("unknown_56", ctypes.c_uint8 * 2),     # 0x56 - Unknown (2 bytes)
         ("level", ctypes.c_uint8),              # 0x58 - Pokemon level ✓ VERIFIED at offset 88
         ("unknown_59", ctypes.c_uint8),         # 0x59 - Unknown (1 byte)
@@ -226,14 +226,6 @@ class PokemonData(ctypes.Structure):
     def species_name(self) -> str:
         """Get the species name for this Pokemon"""
         return get_species_name(self.species_id)
-
-    @property
-    def effective_current_hp(self) -> int:
-        """
-        Return the actual current HP.
-        The correct current HP is stored at offset 0x23 (actualCurrentHp field).
-        """
-        return self.actualCurrentHp
 
     def decrypt_substruct_data(self) -> bytes:
         """
@@ -516,11 +508,11 @@ class PokemonSaveParser:
         print(header)
         print("-" * len(header))
         for slot, pokemon in enumerate(party_pokemon, 1):
-            hp_percent = (pokemon.effective_current_hp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
+            hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
-            hp_display = f"[{hp_bar}] {pokemon.effective_current_hp}/{pokemon.maxHp}"
+            hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
             print(
                 f"{slot:<5}"
                 f"{pokemon.species_id:<8}"
@@ -644,8 +636,8 @@ class PokemonSaveParser:
             # Create individual pokemon panel
             
             # HP Bar
-            hp_percent = (pokemon.effective_current_hp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
-            if pokemon.effective_current_hp == 0:
+            hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
+            if pokemon.currentHp == 0:
                 hp_status = "[red]FAINTED[/red]"
             else:
                 hp_status = "[green]HEALTHY[/green]"
@@ -659,7 +651,7 @@ class PokemonSaveParser:
             info_table.add_row("Level", f"{pokemon.level}")
             info_table.add_row("Nature", f"[bold]{pokemon.nature_str}[/bold]")
             info_table.add_row("Trainer", f"{pokemon.otName_str} (ID: {pokemon.otId_str})")
-            info_table.add_row("HP", f"{pokemon.effective_current_hp}/{pokemon.maxHp} {hp_status}")
+            info_table.add_row("HP", f"{pokemon.currentHp}/{pokemon.maxHp} {hp_status}")
             
             # Stats table
             stats_table = Table(title="Base Stats", box=box.ROUNDED)

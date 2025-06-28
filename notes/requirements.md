@@ -409,24 +409,22 @@ The corrected parser must produce output matching the above ground truth data ex
 
 ---
 
-## Output Snapshot (Baseline as of 2025-06-28)
-*This is the current output of the parser. Use this as a reference: if any of these values change for fields that were already present, you have introduced a regression.*
+## Updated Output Snapshot (Baseline as of 2025-06-28 - After Field Renaming)
+*This is the current output of the parser after renaming actualCurrentHp to currentHp. Use this as a reference: if any of these values change for fields that were already present, you have introduced a regression.*
 
 ```
-python parse_save.py
-[INFO] No save file specified, using default: ./save/player1.sav
 Active save slot: 0
 Valid sectors found: 14
 
 --- Party Pokémon Summary ---
-Slot Nature      Nickname    OT Name   IDNo   Dex ID  Lv  HP                             Atk  Def  Spe  SpA  SpD  
-------------------------------------------------------------------------------------------------------------------
-1    Adamant     Steelix     John      08202  208     44  [░░░░░░░░░░░░░░░░░░░░] 0/131   102  185  63   54   68   
-2    Rash        Breloom     John      08202  286     45  [████████████████████] 126/126 140  93   86   69   63   
-3    Impish      Snorlax     John      08202  143     47  [████████████████████] 248/248 128  114  33   62   122  
-4    Hasty       Ludicolo    John      08202  272     45  [████████████████████] 135/135 91   85   101  94   107  
-5    Sassy       Rayquaza    John      08202  6       41  [████████████████████] 132/132 90   87   99   108  93   
-6    Bold        Sigilyph    John      08202  561     37  [████████████████████] 114/114 62   77   107  85   67   
+Slot Dex ID  Nickname    Lv  Nature    HP                             Atk  Def  Spe  SpA  SpD  OT Name   IDNo   
+----------------------------------------------------------------------------------------------------------------
+1    208     Steelix     44  Adamant   [░░░░░░░░░░░░░░░░░░░░] 0/131   102  185  63   54   68   John      08202  
+2    286     Breloom     45  Docile    [████████████████████] 126/126 140  93   86   69   63   John      08202  
+3    143     Snorlax     47  Calm      [████████████████████] 248/248 128  114  33   62   122  John      08202  
+4    272     Ludicolo    45  Hasty     [████████████████████] 135/135 91   85   101  94   107  John      08202  
+5    6       Rayquaza    41  Sassy     [████████████████████] 132/132 90   87   99   108  93   John      08202  
+6    561     Sigilyph    37  Bold      [████████████████████] 114/114 62   77   107  85   67   John      08202  
 
 --- SaveBlock2 Data ---
 Player Name: John
