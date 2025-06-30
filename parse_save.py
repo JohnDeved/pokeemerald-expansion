@@ -1,90 +1,198 @@
 #!/usr/bin/env python3
 
-"""
-Pokemon Quetzal/Emerald Save File Parser
-
-This parser analyzes save files from Pokemon Emerald-based ROM hack Quetzal.
-"""
-
 import struct
 import ctypes
 import argparse
 import sys
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, NamedTuple, Any
-
-# Rich imports for beautiful terminal output
+from typing import Optional, NamedTuple, TypedDict, Any
+from dataclasses import dataclass
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.columns import Columns
 from rich import box
 
-# Save file structure constants
+# Constants
 SECTOR_SIZE = 4096
 SECTOR_DATA_SIZE = 3968
 SECTOR_FOOTER_SIZE = 12
 SAVEBLOCK1_SIZE = SECTOR_DATA_SIZE * 4
-SAVEBLOCK2_SIZE = SECTOR_DATA_SIZE
 EMERALD_SIGNATURE = 0x08012025
-VANILLA_POKEMON_NAME_LENGTH = 10
-PLAYER_NAME_LENGTH = 7
-
-# Pokémon Quetzal uses 18 sectors per slot instead of 14
 SECTORS_PER_SLOT = 18
 TOTAL_SECTORS = 32
-
-# Party Pokemon constants (for this save file format)
 PARTY_START_OFFSET = 0x6A8
 PARTY_POKEMON_SIZE = 104
 MAX_PARTY_SIZE = 6
-
-# Default paths and offsets
 DEFAULT_SAVE_PATH = "./save/player1.sav"
 
-# Simple JSON data loading functions
-_move_data: Dict[int, str] = {}
-_species_data: Dict[int, str] = {}
-_char_map: Dict[int, str] = {}
-_nature_data: Dict[int, str] = {}
+# Data storage
+_data: dict[str, dict[int, str]] = {}
 
-def _load_pokemon_data():
-    """Load Pokemon data from JSON files"""
-    global _move_data, _species_data, _char_map, _nature_data
+# Type definitions for structured data
+class PlayTimeData(TypedDict):
+    hours: int
+    minutes: int
+    seconds: int
+
+class PokemonDictData(TypedDict):
+    personality: int
+    otId: int
+    nickname: str
+    otName: str
+    currentHp: int
+    speciesId: int
+    item: int
+    move1: int
+    move2: int
+    move3: int
+    move4: int
+    pp1: int
+    pp2: int
+    pp3: int
+    pp4: int
+    hpEV: int
+    atkEV: int
+    defEV: int
+    speEV: int
+    spaEV: int
+    spdEV: int
+    ivData: int
+    level: int
+    maxHp: int
+    attack: int
+    defense: int
+    speed: int
+    spAttack: int
+    spDefense: int
+    displayOtId: str
+    displayNature: str
+    moves: list[int]
+    moveNames: list[str]
+    ppValues: list[int]
+    evs: list[int]
+    ivs: list[int]
+    totalEvs: int
+    totalIvs: int
+
+class SaveData(TypedDict):
+    party_pokemon: list['PokemonData']
+    player_name: str
+    play_time: PlayTimeData
+    active_slot: int
+    sector_map: dict[int, int]
+
+@dataclass(frozen=True)
+class PokemonStats:
+    hp: int
+    attack: int
+    defense: int
+    speed: int
+    sp_attack: int
+    sp_defense: int
+
+@dataclass(frozen=True)
+class MoveData:
+    name: str
+    id: int
+    pp: int
+
+@dataclass(frozen=True)
+class PokemonMoves:
+    move1: MoveData
+    move2: MoveData
+    move3: MoveData
+    move4: MoveData
     
-    for filename, data_dict in [
-        ("pokemon_moves.json", "_move_data"), 
-        ("pokemon_species.json", "_species_data"),
-        ("pokemon_charmap.json", "_char_map"),
-        ("pokemon_natures.json", "_nature_data")
-    ]:
+    @classmethod
+    def from_raw_data(cls, move1_id: int, move2_id: int, move3_id: int, move4_id: int,
+                      pp1: int, pp2: int, pp3: int, pp4: int) -> 'PokemonMoves':
+        return cls(
+            move1=MoveData(name=get_move_name(move1_id) if move1_id != 0 else "---", id=move1_id, pp=pp1),
+            move2=MoveData(name=get_move_name(move2_id) if move2_id != 0 else "---", id=move2_id, pp=pp2),
+            move3=MoveData(name=get_move_name(move3_id) if move3_id != 0 else "---", id=move3_id, pp=pp3),
+            move4=MoveData(name=get_move_name(move4_id) if move4_id != 0 else "---", id=move4_id, pp=pp4)
+        )
+    
+    def get_move_ids(self) -> list[int]:
+        return [self.move1.id, self.move2.id, self.move3.id, self.move4.id]
+    
+    def get_move_names(self) -> list[str]:
+        return [self.move1.name, self.move2.name, self.move3.name, self.move4.name]
+    
+    def get_pp_values(self) -> list[int]:
+        return [self.move1.pp, self.move2.pp, self.move3.pp, self.move4.pp]
+    
+    def to_dict(self) -> dict[str, dict[str, Any]]:
+        return {
+            'move1': {'name': self.move1.name, 'id': self.move1.id, 'pp': self.move1.pp},
+            'move2': {'name': self.move2.name, 'id': self.move2.id, 'pp': self.move2.pp},
+            'move3': {'name': self.move3.name, 'id': self.move3.id, 'pp': self.move3.pp},
+            'move4': {'name': self.move4.name, 'id': self.move4.id, 'pp': self.move4.pp}
+        }
+
+
+@dataclass(frozen=True)
+class PokemonEVs:
+    hp: int
+    attack: int
+    defense: int
+    speed: int
+    sp_attack: int
+    sp_defense: int
+    
+    def to_list(self) -> list[int]:
+        return [self.hp, self.attack, self.defense, self.speed, self.sp_attack, self.sp_defense]
+    
+    @property
+    def total(self) -> int:
+        return sum(self.to_list())
+
+@dataclass(frozen=True)
+class PokemonIVs:
+    hp: int
+    attack: int
+    defense: int
+    speed: int
+    sp_attack: int
+    sp_defense: int
+    
+    def to_list(self) -> list[int]:
+        return [self.hp, self.attack, self.defense, self.speed, self.sp_attack, self.sp_defense]
+    
+    @property
+    def total(self) -> int:
+        return sum(self.to_list())
+
+def _load_data() -> None:
+    files = {
+        "pokemon_moves.json": "moves",
+        "pokemon_species.json": "species", 
+        "pokemon_charmap.json": "chars",
+        "pokemon_natures.json": "natures"
+    }
+    
+    for filename, key in files.items():
         try:
             with open(filename, 'r', encoding='utf-8') as f:
-                globals()[data_dict] = {int(k): v for k, v in json.load(f).items()}
-        except FileNotFoundError:
-            pass  # File doesn't exist, keep empty dict
-        except Exception as e:
-            print(f"[WARNING] Could not load {filename}: {e}")
+                _data[key] = {int(k): v for k, v in json.load(f).items()}
+        except (FileNotFoundError, json.JSONDecodeError):
+            _data[key] = {}
 
-# Load data once at module import time
-_load_pokemon_data()
+_load_data()
 
 def get_move_name(move_id: int) -> str:
-    """Get move name by ID"""
-    return _move_data.get(move_id, f"Move {move_id}")
+    return _data.get("moves", {}).get(move_id, f"Move {move_id}")
 
-def get_species_name(speciesId: int) -> str:
-    """Get species name by ID"""
-    return _species_data.get(speciesId, f"Species {speciesId}")
+def get_species_name(species_id: int) -> str:
+    return _data.get("species", {}).get(species_id, f"Species {species_id}")
 
-def get_char_map() -> Dict[int, str]:
-    """Get the loaded character map"""
-    return _char_map
+def get_char_map() -> dict[int, str]:
+    return _data.get("chars", {})
 
 def get_nature_name(nature_id: int) -> str:
-    """Get nature name by ID"""
-    return _nature_data.get(nature_id, f"Nature {nature_id}")
+    return _data.get("natures", {}).get(nature_id, f"Nature {nature_id}")
 
 
 class SaveBlock2(ctypes.Structure):
@@ -98,55 +206,52 @@ class SaveBlock2(ctypes.Structure):
     ]
 
 class PokemonData(ctypes.Structure):
-    """Pokemon data structure for Pokemon Quetzal ROM hack (104 bytes total)."""
     _pack_ = 1
     _fields_ = [
-        ("personality", ctypes.c_uint32),           # 0x00
-        ("otId", ctypes.c_uint32),                  # 0x04
-        ("nickname", ctypes.c_uint8 * 10),          # 0x08
-        ("unknown_12", ctypes.c_uint8 * 2),         # 0x12
-        ("otName", ctypes.c_uint8 * 7),             # 0x14
-        ("unknown_1B", ctypes.c_uint8 * 8),         # 0x1B
-        ("currentHp", ctypes.c_uint16),             # 0x23
-        ("unknown_25", ctypes.c_uint8 * 3),         # 0x25
-        ("speciesId", ctypes.c_uint16),             # 0x28
-        ("item", ctypes.c_uint16),                  # 0x2A
-        ("unknown_2C", ctypes.c_uint8 * 8),         # 0x2C
-        ("move1", ctypes.c_uint16),                 # 0x34
-        ("move2", ctypes.c_uint16),                 # 0x36
-        ("move3", ctypes.c_uint16),                 # 0x38
-        ("move4", ctypes.c_uint16),                 # 0x3A
-        ("pp1", ctypes.c_uint8),                    # 0x3C
-        ("pp2", ctypes.c_uint8),                    # 0x3D
-        ("pp3", ctypes.c_uint8),                    # 0x3E
-        ("pp4", ctypes.c_uint8),                    # 0x3F
-        ("hpEV", ctypes.c_uint8),                   # 0x40
-        ("atkEV", ctypes.c_uint8),                  # 0x41
-        ("defEV", ctypes.c_uint8),                  # 0x42
-        ("speEV", ctypes.c_uint8),                  # 0x43
-        ("spaEV", ctypes.c_uint8),                  # 0x44
-        ("spdEV", ctypes.c_uint8),                  # 0x45
-        ("unknown_46", ctypes.c_uint8 * 10),        # 0x46
-        ("ivData", ctypes.c_uint32),                # 0x50
-        ("unknown_54", ctypes.c_uint8 * 4),         # 0x54
-        ("level", ctypes.c_uint8),                  # 0x58
-        ("unknown_59", ctypes.c_uint8),             # 0x59
-        ("maxHp", ctypes.c_uint16),                 # 0x5A
-        ("attack", ctypes.c_uint16),                # 0x5C
-        ("defense", ctypes.c_uint16),               # 0x5E
-        ("speed", ctypes.c_uint16),                 # 0x60
-        ("spAttack", ctypes.c_uint16),              # 0x62
-        ("spDefense", ctypes.c_uint16),             # 0x64
-        ("unknown_66", ctypes.c_uint8 * 2),         # 0x66
+        ("personality", ctypes.c_uint32),
+        ("otId", ctypes.c_uint32),
+        ("nickname", ctypes.c_uint8 * 10),
+        ("unknown_12", ctypes.c_uint8 * 2),
+        ("otName", ctypes.c_uint8 * 7),
+        ("unknown_1B", ctypes.c_uint8 * 8),
+        ("currentHp", ctypes.c_uint16),
+        ("unknown_25", ctypes.c_uint8 * 3),
+        ("speciesId", ctypes.c_uint16),
+        ("item", ctypes.c_uint16),
+        ("unknown_2C", ctypes.c_uint8 * 8),
+        ("move1", ctypes.c_uint16),
+        ("move2", ctypes.c_uint16),
+        ("move3", ctypes.c_uint16),
+        ("move4", ctypes.c_uint16),
+        ("pp1", ctypes.c_uint8),
+        ("pp2", ctypes.c_uint8),
+        ("pp3", ctypes.c_uint8),
+        ("pp4", ctypes.c_uint8),
+        ("hpEV", ctypes.c_uint8),
+        ("atkEV", ctypes.c_uint8),
+        ("defEV", ctypes.c_uint8),
+        ("speEV", ctypes.c_uint8),
+        ("spaEV", ctypes.c_uint8),
+        ("spdEV", ctypes.c_uint8),
+        ("unknown_46", ctypes.c_uint8 * 10),
+        ("ivData", ctypes.c_uint32),
+        ("unknown_54", ctypes.c_uint8 * 4),
+        ("level", ctypes.c_uint8),
+        ("unknown_59", ctypes.c_uint8),
+        ("maxHp", ctypes.c_uint16),
+        ("attack", ctypes.c_uint16),
+        ("defense", ctypes.c_uint16),
+        ("speed", ctypes.c_uint16),
+        ("spAttack", ctypes.c_uint16),
+        ("spDefense", ctypes.c_uint16),
+        ("unknown_66", ctypes.c_uint8 * 2),
     ]
     
-    # Type annotation for raw_bytes attribute that gets added dynamically
     raw_bytes: bytes
     
     @property
     def nature_str(self) -> str:
-        nature_index = (self.personality & 0xFF) % 25
-        return get_nature_name(nature_index)
+        return get_nature_name((self.personality & 0xFF) % 25)
     
     @property
     def otName_str(self) -> str:
@@ -165,40 +270,42 @@ class PokemonData(ctypes.Structure):
         return get_species_name(self.speciesId)
     
     @property
-    def moves(self) -> List[int]:
-        return [self.move1, self.move2, self.move3, self.move4]
+    def moves_data(self) -> PokemonMoves:
+        return PokemonMoves.from_raw_data(
+            move1_id=self.move1, move2_id=self.move2, move3_id=self.move3, move4_id=self.move4,
+            pp1=self.pp1, pp2=self.pp2, pp3=self.pp3, pp4=self.pp4
+        )
     
     @property
-    def moves_from_substruct(self) -> List[int]:
-        """Legacy method for backward compatibility."""
-        return self.moves
-    
-    @property
-    def evs(self) -> List[int]:
-        """Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]"""
+    def evs(self) -> list[int]:
         return [self.hpEV, self.atkEV, self.defEV, self.speEV, self.spaEV, self.spdEV]
     
     @property
-    def ivs(self) -> List[int]:
-        """Returns [HP, Attack, Defense, Speed, Sp. Attack, Sp. Defense]"""
-        iv_data = self.ivData
-        return [
-            iv_data & 0x1F,           # HP
-            (iv_data >> 5) & 0x1F,    # Attack
-            (iv_data >> 10) & 0x1F,   # Defense
-            (iv_data >> 15) & 0x1F,   # Speed
-            (iv_data >> 20) & 0x1F,   # Sp. Attack
-            (iv_data >> 25) & 0x1F,   # Sp. Defense
-        ]
+    def evs_structured(self) -> PokemonEVs:
+        return PokemonEVs(
+            hp=self.hpEV, attack=self.atkEV, defense=self.defEV,
+            speed=self.speEV, sp_attack=self.spaEV, sp_defense=self.spdEV
+        )
     
     @property
-    def move_names(self) -> List[str]:
-        return [get_move_name(move_id) if move_id != 0 else "---" for move_id in self.moves]
-
-    @property
-    def pp_values(self) -> List[int]:
-        return [self.pp1, self.pp2, self.pp3, self.pp4]
+    def ivs(self) -> list[int]:
+        iv = self.ivData
+        return [(iv >> (i * 5)) & 0x1F for i in range(6)]
     
+    @property
+    def ivs_structured(self) -> PokemonIVs:
+        ivs_list = self.ivs
+        return PokemonIVs(
+            hp=ivs_list[0], attack=ivs_list[1], defense=ivs_list[2],
+            speed=ivs_list[3], sp_attack=ivs_list[4], sp_defense=ivs_list[5]
+        )
+    
+    @property
+    def stats_structured(self) -> PokemonStats:
+        return PokemonStats(
+            hp=self.maxHp, attack=self.attack, defense=self.defense,
+            speed=self.speed, sp_attack=self.spAttack, sp_defense=self.spDefense
+        )
 
 
 class SectorInfo(NamedTuple):
@@ -209,14 +316,13 @@ class SectorInfo(NamedTuple):
 
 
 class PokemonSaveParser:
-    """Pokemon Quetzal ROM hack save file parser."""
     
-    def __init__(self, save_path: str, forced_slot: Optional[int] = None):
+    def __init__(self, save_path: str, forced_slot: Optional[int] = None) -> None:
         self.save_path = Path(save_path)
         self.save_data: Optional[bytes] = None
         self.active_slot_start: int = 0
-        self.sector_map: Dict[int, int] = {}
-        self.forced_slot = forced_slot  # None for auto-detect, 1 for slot 1, 2 for slot 2
+        self.sector_map: dict[int, int] = {}
+        self.forced_slot = forced_slot
 
     def load_save_file(self) -> None:
         if not self.save_path.exists():
@@ -232,7 +338,7 @@ class PokemonSaveParser:
         result = ""
         char_map = get_char_map()
         for byte in encoded_bytes:
-            if byte == 0xFF:  # Terminator
+            if byte == 0xFF:
                 break
             result += char_map.get(byte, "?")
         return result
@@ -241,28 +347,23 @@ class PokemonSaveParser:
         if not self.save_data:
             raise ValueError("Save data not loaded")
         
-        # Calculate the footer offset
         footer_offset = (sector_index * SECTOR_SIZE) + SECTOR_SIZE - SECTOR_FOOTER_SIZE
         
         if footer_offset + SECTOR_FOOTER_SIZE > len(self.save_data):
             return SectorInfo(-1, 0, 0, False)
             
         try:
-            # Extract footer data: id (u16), checksum (u16), signature (u32), counter (u32)
             sector_id, checksum, signature, counter = struct.unpack(
                 "<HHII",
                 self.save_data[footer_offset:footer_offset + SECTOR_FOOTER_SIZE]
             )
             
-            # Check signature first
             if signature != EMERALD_SIGNATURE:
                 return SectorInfo(sector_id, checksum, counter, False)
             
-            # Get sector data for checksum verification
             sector_start = sector_index * SECTOR_SIZE
             sector_data = self.save_data[sector_start:sector_start + SECTOR_DATA_SIZE]
             
-            # Calculate checksum and verify
             calculated_checksum = self.calculate_sector_checksum(sector_data)
             valid = (calculated_checksum == checksum)
             
@@ -271,28 +372,23 @@ class PokemonSaveParser:
             return SectorInfo(-1, 0, 0, False)
 
     def determine_active_slot(self) -> None:
-        """Determine the active save slot based on highest counter or forced selection."""
         if self.forced_slot is not None:
             self.active_slot_start = 0 if self.forced_slot == 1 else 14
             return
         
-        # Get highest counter from each slot
         slot1_counter = max((self.get_sector_info(i).counter for i in range(18) 
                             if self.get_sector_info(i).valid), default=0)
         slot2_counter = max((self.get_sector_info(i).counter for i in range(14, 32) 
                             if self.get_sector_info(i).valid), default=0)
         
-        # Use slot with higher counter (slot 2 wins ties)
         self.active_slot_start = 14 if slot2_counter >= slot1_counter else 0
 
     def debug_save_slots(self) -> None:
-        """Debug method to print information about both save slots."""
         print("\n--- Save Slot Debug Information ---")
         
-        # Helper function to analyze a slot
-        def analyze_slot(slot_range, slot_name):
-            valid_sectors = []
-            counters = []
+        def analyze_slot(slot_range: range, slot_name: str) -> tuple[int, int]:
+            valid_sectors: list[int] = []
+            counters: list[int] = []
             for i in slot_range:
                 sector_info = self.get_sector_info(i)
                 if sector_info.valid:
@@ -304,61 +400,24 @@ class PokemonSaveParser:
             print(f"{slot_name}: {len(valid_sectors)} valid sectors, max counter {max_counter:08X}")
             return len(valid_sectors), max_counter
         
-        # Analyze both slots
-        slot1_count, slot1_counter = analyze_slot(range(18), "Slot 1 (sectors 0-17)")
-        slot2_count, slot2_counter = analyze_slot(range(14, 32), "Slot 2 (sectors 14-31)")
+        _, slot1_counter = analyze_slot(range(18), "Slot 1 (sectors 0-17)")
+        _, slot2_counter = analyze_slot(range(14, 32), "Slot 2 (sectors 14-31)")
         
-        # Show active slot decision
         active_slot = 14 if slot2_counter >= slot1_counter else 0
         print(f"\nActive slot: {active_slot} (highest counter wins, slot 2 wins ties)")
 
     def build_sector_map(self) -> None:
-        """
-        Build sector map for the active slot.
-        If a forced slot is specified, prioritize that slot but allow recovery from the other slot.
-        Otherwise, use sectors with the highest counter and recover missing sectors.
-        """
         self.sector_map = {}
         
         if self.forced_slot is not None:
-            # Forced slot: prioritize specified slot but allow recovery
-            primary_range = range(18) if self.forced_slot == 1 else range(14, 32)
-            other_range = range(14, 32) if self.forced_slot == 1 else range(18)
-            
-            # Collect sectors from forced slot
-            for i in primary_range:
-                sector_info = self.get_sector_info(i)
-                if sector_info.valid:
-                    self.sector_map[sector_info.id] = i
-            
-            # Recover missing critical sectors from other slot
-            missing_critical = [i for i in range(5) if i not in self.sector_map]
-            for i in other_range:
-                sector_info = self.get_sector_info(i)
-                if sector_info.valid and sector_info.id in missing_critical:
-                    self.sector_map[sector_info.id] = i
-                    missing_critical.remove(sector_info.id)
-            
-            if missing_critical:
-                print(f"[WARNING] Missing critical sectors: {missing_critical}")
-                
+            sector_range = range(18) if self.forced_slot == 1 else range(14, 32)
         else:
-            # Auto-detection mode: use sectors with highest counters
-            all_sectors = {}  # sector_id -> (physical_sector, counter)
-            
-            for i in range(32):
-                sector_info = self.get_sector_info(i)
-                if sector_info.valid:
-                    sector_id = sector_info.id
-                    if sector_id not in all_sectors or sector_info.counter > all_sectors[sector_id][1]:
-                        all_sectors[sector_id] = (i, sector_info.counter)
-            
-            for sector_id, (physical_sector, counter) in all_sectors.items():
-                self.sector_map[sector_id] = physical_sector
-            
-            missing_critical = [i for i in range(5) if i not in self.sector_map]
-            if missing_critical:
-                print(f"[ERROR] Missing critical sectors: {missing_critical}")
+            sector_range = range(self.active_slot_start, self.active_slot_start + 18)
+        
+        for i in sector_range:
+            sector_info = self.get_sector_info(i)
+            if sector_info.valid:
+                self.sector_map[sector_info.id] = i
 
     def extract_saveblock1(self) -> bytearray:
         if not self.save_data:
@@ -387,42 +446,36 @@ class PokemonSaveParser:
         saveblock2_data = self.save_data[start_offset:start_offset + SECTOR_DATA_SIZE]
         return saveblock2_data
 
-    def parse_party_pokemon(self, saveblock1_data: bytes) -> List[PokemonData]:
-        party_pokemon: List[PokemonData] = []
+    def parse_party_pokemon(self, saveblock1_data: bytes) -> list[PokemonData]:
+        party_pokemon = []
         for slot in range(MAX_PARTY_SIZE):
-            pokemon_offset = PARTY_START_OFFSET + slot * PARTY_POKEMON_SIZE
-            pokemon_data = saveblock1_data[pokemon_offset:pokemon_offset + PARTY_POKEMON_SIZE]
-            if len(pokemon_data) < PARTY_POKEMON_SIZE:
-                break
+            offset = PARTY_START_OFFSET + slot * PARTY_POKEMON_SIZE
+            data = saveblock1_data[offset:offset + PARTY_POKEMON_SIZE]
             
-            if len(pokemon_data) < ctypes.sizeof(PokemonData):
+            if len(data) < ctypes.sizeof(PokemonData):
                 break
-            pokemon_struct = PokemonData.from_buffer_copy(pokemon_data[:ctypes.sizeof(PokemonData)])
-            if pokemon_struct.speciesId == 0:
+                
+            pokemon = PokemonData.from_buffer_copy(data[:ctypes.sizeof(PokemonData)])
+            if pokemon.speciesId == 0:
                 break
-            # Store raw bytes as an attribute for debugging
-            pokemon_struct.raw_bytes = pokemon_data
-            party_pokemon.append(pokemon_struct)
+                
+            pokemon.raw_bytes = data
+            party_pokemon.append(pokemon)
         return party_pokemon
 
     def parse_player_name(self, saveblock2_data: bytes) -> str:
-        if len(saveblock2_data) < ctypes.sizeof(SaveBlock2):
-            raise ValueError("SaveBlock2 data too small")
         saveblock2 = SaveBlock2.from_buffer_copy(saveblock2_data)
-        player_name_bytes = bytes(saveblock2.playerName)
-        return PokemonSaveParser.decode_pokemon_string(player_name_bytes)
+        return PokemonSaveParser.decode_pokemon_string(bytes(saveblock2.playerName))
 
-    def parse_play_time(self, saveblock2_data: bytes) -> Dict[str, int]:
-        if len(saveblock2_data) < ctypes.sizeof(SaveBlock2):
-            raise ValueError("SaveBlock2 data too small")
+    def parse_play_time(self, saveblock2_data: bytes) -> PlayTimeData:
         saveblock2 = SaveBlock2.from_buffer_copy(saveblock2_data)
-        return {
-            'hours': saveblock2.playTimeHours,
-            'minutes': saveblock2.playTimeMinutes,
-            'seconds': saveblock2.playTimeSeconds
-        }
+        return PlayTimeData(
+            hours=saveblock2.playTimeHours,
+            minutes=saveblock2.playTimeMinutes,
+            seconds=saveblock2.playTimeSeconds
+        )
 
-    def parse_save_file(self) -> Dict[str, Any]:
+    def parse_save_file(self) -> SaveData:
         self.load_save_file()
         self.determine_active_slot()
         self.build_sector_map()
@@ -431,252 +484,194 @@ class PokemonSaveParser:
         player_name = self.parse_player_name(saveblock2_data)
         party_pokemon = self.parse_party_pokemon(saveblock1_data)
         play_time = self.parse_play_time(saveblock2_data)
-        return {
-            'party_pokemon': party_pokemon,
-            'player_name': player_name,
-            'play_time': play_time,
-            'active_slot': self.active_slot_start,
-            'sector_map': self.sector_map
-        }
+        return SaveData(
+            party_pokemon=party_pokemon,
+            player_name=player_name,
+            play_time=play_time,
+            active_slot=self.active_slot_start,
+            sector_map=self.sector_map
+        )
 
     @staticmethod
-    def display_party_pokemon(party_pokemon: List[PokemonData]) -> None:
+    def display_party_pokemon(party_pokemon: list[PokemonData]) -> None:
         print("\n--- Party Pokémon Summary ---")
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
         
-        header = (
-            f"{'Slot':<5}{'Dex ID':<8}{'Nickname':<12}{'Lv':<4}{'Nature':<10}"
-            f"{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
-            f"{'OT Name':<10}{'IDNo':<7}"
-        )
+        header = f"{'Slot':<5}{'Dex ID':<8}{'Nickname':<12}{'Lv':<4}{'Nature':<10}{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}{'OT Name':<10}{'IDNo':<7}"
         print(header)
         print("-" * len(header))
         
         for slot, pokemon in enumerate(party_pokemon, 1):
-            hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
-            hp_bar_length = 20
-            filled_bars = int(hp_bar_length * hp_percent)
-            hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
-            hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
+            hp_bars = int(20 * pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0
+            hp_display = f"[{'█' * hp_bars}{'░' * (20 - hp_bars)}] {pokemon.currentHp}/{pokemon.maxHp}"
             
-            print(
-                f"{slot:<5}{pokemon.speciesId:<8}{pokemon.nickname_str:<12}{pokemon.level:<4}"
-                f"{pokemon.nature_str:<10}{hp_display:<30} {pokemon.attack:<5}{pokemon.defense:<5}"
-                f"{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
-                f"{pokemon.otName_str:<10}{pokemon.otId_str:<7}"
-            )
+            print(f"{slot:<5}{pokemon.speciesId:<8}{pokemon.nickname_str:<12}{pokemon.level:<4}"
+                  f"{pokemon.nature_str:<10}{hp_display:<30} {pokemon.attack:<5}{pokemon.defense:<5}"
+                  f"{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
+                  f"{pokemon.otName_str:<10}{pokemon.otId_str:<7}")
 
     @staticmethod
-    def display_saveblock2_info(save_data: Dict[str, Any]) -> None:
+    def display_saveblock2_info(save_data: SaveData) -> None:
         print("\n--- SaveBlock2 Data ---")
         print(f"Player Name: {save_data['player_name']}")
         play_time = save_data['play_time']
-        print(f"Play Time: {play_time['hours']}h {play_time['minutes']}m {save_data['play_time']['seconds']}s")
+        print(f"Play Time: {play_time['hours']}h {play_time['minutes']}m {play_time['seconds']}s")
 
     @staticmethod
-    def display_save_info(save_data: Dict[str, Any]) -> None:
+    def display_save_info(save_data: SaveData) -> None:
         print(f"Active save slot: {save_data['active_slot']}")
         print(f"Valid sectors found: {len(save_data['sector_map'])}")
         PokemonSaveParser.display_party_pokemon(save_data['party_pokemon'])
         PokemonSaveParser.display_saveblock2_info(save_data)
 
     @staticmethod
-    def display_party_pokemon_raw(party_pokemon: List[PokemonData]) -> None:
+    def display_party_pokemon_raw(party_pokemon: list[PokemonData]) -> None:
         print("\n--- Party Pokémon Raw Bytes ---")
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
         for slot, pokemon in enumerate(party_pokemon, 1):
-            nickname = PokemonSaveParser.decode_pokemon_string(bytes(pokemon.nickname))
-            print(f"\n--- Slot {slot}: {nickname} ---")
-            # Use the raw bytes stored during parsing
+            print(f"\n--- Slot {slot}: {pokemon.nickname_str} ---")
             print(' '.join(f'{b:02x}' for b in pokemon.raw_bytes))
 
     @staticmethod
-    def pokemon_to_dict(pokemon: PokemonData) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-        
-        # Handle ctypes _fields_ which can be either 2-tuple or 3-tuple
+    def pokemon_to_dict(pokemon: PokemonData) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         for field_info in pokemon._fields_:
-            if len(field_info) >= 2:
-                field_name = field_info[0]
-                value = getattr(pokemon, field_name)
+            field_name = field_info[0]
+            value = getattr(pokemon, field_name)
+            if field_name in ["nickname", "otName"]:
+                data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
+            elif isinstance(value, ctypes.Array):
+                data[field_name] = list(value)  # type: ignore
+            else:
+                data[field_name] = int(value) if hasattr(value, '__int__') else value
                 
-                if field_name in ["nickname", "otName"]:
-                    data[field_name] = PokemonSaveParser.decode_pokemon_string(bytes(value))
-                elif isinstance(value, ctypes.Array):
-                    data[field_name] = [int(x) for x in value]
-                else:
-                    data[field_name] = int(value) if hasattr(value, '__int__') else value
-                    
-        data['displayOtId'] = pokemon.otId_str
-        data['displayNature'] = pokemon.nature_str
-        data['moves'] = pokemon.moves
-        data['moveNames'] = pokemon.move_names
-        data['ppValues'] = pokemon.pp_values
-        data['evs'] = pokemon.evs
-        data['ivs'] = pokemon.ivs
-        data['totalEvs'] = sum(pokemon.evs)
-        data['totalIvs'] = sum(pokemon.ivs)
+        data.update({
+            'displayOtId': pokemon.otId_str,
+            'displayNature': pokemon.nature_str,
+            'moves': pokemon.moves_data.to_dict(),
+            'evs': pokemon.evs,
+            'ivs': pokemon.ivs,
+            'totalEvs': sum(pokemon.evs),
+            'totalIvs': sum(pokemon.ivs)
+        })
         return data
 
     @staticmethod
-    def display_json_output(save_data: Dict[str, Any]) -> None:
-        party_pokemon_for_json: List[Dict[str, Any]] = [
-            PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']
-        ]
-
-        json_output: Dict[str, Any] = {
+    def display_json_output(save_data: SaveData) -> None:
+        party_data = [PokemonSaveParser.pokemon_to_dict(p) for p in save_data['party_pokemon']]
+        output = {
             'player_name': save_data['player_name'],
             'play_time': save_data['play_time'],
             'active_slot': save_data['active_slot'],
             'sector_map': save_data['sector_map'],
-            'party_pokemon': party_pokemon_for_json
+            'party_pokemon': party_data
         }
-        print(json.dumps(json_output))
+        print(json.dumps(output))
 
     @staticmethod
-    def display_party_pokemon_detailed(party_pokemon: List[PokemonData]) -> None:
-        """Display party pokemon using rich formatting for beautiful output"""
+    def _create_basic_info_table(pokemon: PokemonData) -> Table:
+        info_table = Table(show_header=False, box=box.SIMPLE, pad_edge=False)
+        info_table.add_column("Field", style="cyan", width=12)
+        info_table.add_column("Value", style="white")
+        
+        hp_bar = "█" * (pokemon.currentHp * 15 // pokemon.maxHp) if pokemon.maxHp > 0 else ""
+        
+        info_table.add_row("Species", f"[bold]{pokemon.species_name}[/bold] (#{pokemon.speciesId})")
+        info_table.add_row("Nickname", f"[yellow]{pokemon.nickname_str}[/yellow]")
+        info_table.add_row("Level", f"[bright_white]{pokemon.level}[/bright_white]")
+        info_table.add_row("Nature", f"[magenta]{pokemon.nature_str}[/magenta]")
+        info_table.add_row("Trainer", f"{pokemon.otName_str} ([dim]{pokemon.otId_str}[/dim])")
+        info_table.add_row("HP", f"[blue]{hp_bar}[/blue] {pokemon.currentHp}/{pokemon.maxHp}")
+        return info_table
+
+    @staticmethod
+    def _create_stats_table(pokemon: PokemonData) -> Table:
+        stats_table = Table(title="[cyan]Base Stats[/cyan]", box=box.ROUNDED, width=35)
+        stats_table.add_column("Stat", style="cyan", width=8)
+        stats_table.add_column("Value", justify="right", style="yellow", width=6)
+        stats_table.add_column("EV", justify="right", style="green", width=4)
+        stats_table.add_column("IV", justify="right", style="bright_blue", width=4)
+        
+        evs = pokemon.evs
+        ivs = pokemon.ivs
+        stats_table.add_row("HP", f"{pokemon.maxHp}", f"{evs[0]}", f"{ivs[0]}")
+        stats_table.add_row("Attack", f"{pokemon.attack}", f"{evs[1]}", f"{ivs[1]}")
+        stats_table.add_row("Defense", f"{pokemon.defense}", f"{evs[2]}", f"{ivs[2]}")
+        stats_table.add_row("Speed", f"{pokemon.speed}", f"{evs[3]}", f"{ivs[3]}")
+        stats_table.add_row("Sp.Atk", f"{pokemon.spAttack}", f"{evs[4]}", f"{ivs[4]}")
+        stats_table.add_row("Sp.Def", f"{pokemon.spDefense}", f"{evs[5]}", f"{ivs[5]}")
+        return stats_table
+
+    @staticmethod
+    def _create_moves_table(pokemon: PokemonData) -> Table:
+        moves_table = Table(title="[green]Moves[/green]", box=box.ROUNDED, width=45)
+        moves_table.add_column("#", width=2)
+        moves_table.add_column("Move", style="green")
+        moves_table.add_column("PP", justify="center", style="yellow", width=4)
+        
+        for i, (move_name, pp) in enumerate(zip(pokemon.moves_data.get_move_names(), pokemon.moves_data.get_pp_values()), 1):
+            if move_name != "---":
+                moves_table.add_row(f"{i}", move_name, f"{pp}")
+            else:
+                moves_table.add_row(f"{i}", "[dim]---[/dim]", "[dim]---[/dim]")
+        return moves_table
+
+    @staticmethod
+    def _create_summary_table(pokemon: PokemonData) -> Table:
+        evs = pokemon.evs
+        ivs = pokemon.ivs
+        ev_total = sum(evs)
+        iv_total = sum(ivs)
+        ev_color = "green" if ev_total <= 510 else "red"
+        iv_color = "bright_green" if iv_total >= 155 else "yellow" if iv_total >= 93 else "red"
+        
+        summary_table = Table(show_header=False, box=box.SIMPLE, pad_edge=False)
+        summary_table.add_column("Label", style="cyan", width=12)
+        summary_table.add_column("Value", style="white")
+        summary_table.add_row("Total EVs", f"[{ev_color}]{ev_total}[/{ev_color}]/510")
+        summary_table.add_row("Total IVs", f"[{iv_color}]{iv_total}[/{iv_color}]/186")
+        return summary_table
+
+    @staticmethod
+    def display_party_pokemon_detailed(party_pokemon: list[PokemonData]) -> None:
         console = Console()
         
         if not party_pokemon:
             console.print(Panel("No Pokémon found in party.", title="Party", style="red"))
             return
         
-        # Create main layout
-        console.print("\n")
         console.print(Panel.fit("🎮 POKÉMON PARTY SUMMARY 🎮", style="bold magenta"))
         
         for slot, pokemon in enumerate(party_pokemon, 1):
-            # Create individual pokemon panel
+            info_table = PokemonSaveParser._create_basic_info_table(pokemon)
+            stats_table = PokemonSaveParser._create_stats_table(pokemon)
+            moves_table = PokemonSaveParser._create_moves_table(pokemon)
+            summary_table = PokemonSaveParser._create_summary_table(pokemon)
             
-            # HP Bar
-            hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
-            if pokemon.currentHp == 0:
-                hp_status = "[red]FAINTED[/red]"
-            else:
-                hp_status = "[green]HEALTHY[/green]"
+            left_panel = Panel(info_table, title="[bold]Basic Info[/bold]", border_style="blue")
+            right_content = Table.grid()
+            right_content.add_row(stats_table)
+            right_content.add_row("")
+            right_content.add_row(moves_table)
+            right_content.add_row("")
+            right_content.add_row(summary_table)
             
-            # Basic info table
-            info_table = Table(show_header=False, box=box.SIMPLE)
-            info_table.add_column("Field", style="cyan")
-            info_table.add_column("Value", style="white")
-            
-            info_table.add_row("Species", f"{pokemon.species_name} (#{pokemon.speciesId})")
-            info_table.add_row("Level", f"{pokemon.level}")
-            info_table.add_row("Nature", f"[bold]{pokemon.nature_str}[/bold]")
-            info_table.add_row("Trainer", f"{pokemon.otName_str} (ID: {pokemon.otId_str})")
-            info_table.add_row("HP", f"{pokemon.currentHp}/{pokemon.maxHp} {hp_status}")
-            
-            # Stats table
-            stats_table = Table(title="Base Stats", box=box.ROUNDED)
-            stats_table.add_column("Stat", style="cyan")
-            stats_table.add_column("Value", justify="right", style="yellow")
-            
-            stats_table.add_row("Attack", f"{pokemon.attack}")
-            stats_table.add_row("Defense", f"{pokemon.defense}")
-            stats_table.add_row("Speed", f"{pokemon.speed}")
-            stats_table.add_row("Sp.Atk", f"{pokemon.spAttack}")
-            stats_table.add_row("Sp.Defense", f"{pokemon.spDefense}")
-            
-            # Moves table
-            moves_table = Table(title="Moves", box=box.ROUNDED)
-            moves_table.add_column("#", width=3)
-            moves_table.add_column("Move", style="green")
-            moves_table.add_column("PP", justify="center", style="yellow")
-            moves_table.add_column("ID", justify="right", style="dim")
-            
-            moves = pokemon.moves_from_substruct
-            move_names = pokemon.move_names
-            pp_values = pokemon.pp_values
-            for i, (move_id, move_name, pp) in enumerate(zip(moves, move_names, pp_values), 1):
-                if move_id > 0:
-                    moves_table.add_row(f"{i}", move_name, f"{pp}", f"{move_id}")
-                else:
-                    moves_table.add_row(f"{i}", "[dim]---[/dim]", "[dim]---[/dim]", "[dim]---[/dim]")
-            
-            # EVs and IVs - use direct properties instead of substruct parsing
-            iv_data_table = Table(title="Training Data", box=box.ROUNDED)
-            iv_data_table.add_column("Type", style="cyan")
-            iv_data_table.add_column("HP", justify="center")
-            iv_data_table.add_column("Atk", justify="center") 
-            iv_data_table.add_column("Def", justify="center")
-            iv_data_table.add_column("Spe", justify="center")
-            iv_data_table.add_column("SpA", justify="center")
-            iv_data_table.add_column("SpD", justify="center")
-            iv_data_table.add_column("Total", justify="center", style="bold")
-            
-            # Get EVs directly from the structure
-            evs = pokemon.evs
-            total_evs = sum(evs)
-            ev_style = "green" if total_evs <= 510 else "red"
-            iv_data_table.add_row(
-                f"[{ev_style}]EVs[/{ev_style}]",
-                f"[{ev_style}]{evs[0]}[/{ev_style}]",  # HP
-                f"[{ev_style}]{evs[1]}[/{ev_style}]",  # Attack
-                f"[{ev_style}]{evs[2]}[/{ev_style}]",  # Defense
-                f"[{ev_style}]{evs[3]}[/{ev_style}]",  # Speed
-                f"[{ev_style}]{evs[4]}[/{ev_style}]",  # Sp.Attack
-                f"[{ev_style}]{evs[5]}[/{ev_style}]",  # Sp.Defense
-                f"[{ev_style}]{total_evs}[/{ev_style}]"  # Total EVs
-            )
-            
-            # Get IVs directly from the structure
-            ivs = pokemon.ivs
-            total_ivs = sum(ivs)
-            
-            # Color code IVs (31 is perfect)
-            def iv_color(iv: int) -> str:
-                if iv == 31:
-                    return "bright_green"
-                elif iv >= 25:
-                    return "green" 
-                elif iv >= 15:
-                    return "yellow"
-                else:
-                    return "red"
-            
-            # Color code total IVs (186 is perfect = 31*6)
-            def total_iv_color(total: int) -> str:
-                if total == 186:
-                    return "bright_green"
-                elif total >= 155:  # ~25 average
-                    return "green"
-                elif total >= 93:   # ~15 average
-                    return "yellow"
-                else:
-                    return "red"
-            
-            iv_data_table.add_row(
-                "IVs",
-                f"[{iv_color(ivs[0])}]{ivs[0]}[/{iv_color(ivs[0])}]",  # HP
-                f"[{iv_color(ivs[1])}]{ivs[1]}[/{iv_color(ivs[1])}]",  # Attack
-                f"[{iv_color(ivs[2])}]{ivs[2]}[/{iv_color(ivs[2])}]",  # Defense
-                f"[{iv_color(ivs[3])}]{ivs[3]}[/{iv_color(ivs[3])}]",  # Speed
-                f"[{iv_color(ivs[4])}]{ivs[4]}[/{iv_color(ivs[4])}]",  # Sp.Attack
-                f"[{iv_color(ivs[5])}]{ivs[5]}[/{iv_color(ivs[5])}]",  # Sp.Defense
-                f"[{total_iv_color(total_ivs)}]{total_ivs}[/{total_iv_color(total_ivs)}]"  # Total IVs
-            )
-            
-            # Combine tables into columns
-            left_column = Columns([info_table, stats_table], equal=True)
-            right_column = Columns([moves_table, iv_data_table], equal=True)
-            
-            # Create the pokemon panel
+            layout = Columns([left_panel, right_content], equal=False, expand=True)
             pokemon_panel = Panel(
-                Columns([left_column, right_column], equal=True),
+                layout,
                 title=f"[bold]Slot {slot}: {pokemon.nickname_str.upper()}[/bold]",
-                border_style="blue"
+                border_style="bright_blue",
+                padding=(1, 2)
             )
             
             console.print(pokemon_panel)
             console.print()
 
     def calculate_sector_checksum(self, sector_data: bytes) -> int:
-        """Calculate sector checksum using the original game's algorithm."""
         if len(sector_data) < SECTOR_DATA_SIZE:
             return 0
             
@@ -692,26 +687,20 @@ def main() -> None:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 
-    parser = argparse.ArgumentParser(description='Pokemon Quetzal ROM Hack Save File Parser')
-    parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH,
-                        help='Path to the save file (default: ./save/player1.sav)')
-    parser.add_argument('--debugParty', action='store_true', help='Display raw party pokemon bytes')
-    parser.add_argument('--debugSlots', action='store_true', help='Display save slot debug information')
-    parser.add_argument('--detailed', action='store_true', help='Display detailed party pokemon information')
-    parser.add_argument('--json', action='store_true', help='Return JSON instead of human readable table')
+    parser = argparse.ArgumentParser(description='Pokemon Quetzal save file parser')
+    parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH, help='Path to save file')
+    parser.add_argument('--debugParty', action='store_true', help='Show raw Pokemon bytes')
+    parser.add_argument('--debugSlots', action='store_true', help='Show slot debug info')
+    parser.add_argument('--detailed', action='store_true', help='Show detailed Pokemon info')
+    parser.add_argument('--json', action='store_true', help='Output as JSON')
     
     slot_group = parser.add_mutually_exclusive_group()
-    slot_group.add_argument('--slot1', action='store_true', help='Force load from save slot 1 (sectors 0-17)')
-    slot_group.add_argument('--slot2', action='store_true', help='Force load from save slot 2 (sectors 14-31)')
+    slot_group.add_argument('--slot1', action='store_true', help='Force slot 1')
+    slot_group.add_argument('--slot2', action='store_true', help='Force slot 2')
     
     args = parser.parse_args()
     
-    # Determine forced slot
-    forced_slot = None
-    if args.slot1:
-        forced_slot = 1
-    elif args.slot2:
-        forced_slot = 2
+    forced_slot = 1 if args.slot1 else 2 if args.slot2 else None
     
     try:
         save_parser = PokemonSaveParser(args.save_file, forced_slot)
@@ -722,6 +711,7 @@ def main() -> None:
             return
             
         save_data = save_parser.parse_save_file()
+        
         if args.json:
             PokemonSaveParser.display_json_output(save_data)
         elif args.debugParty:
@@ -730,11 +720,9 @@ def main() -> None:
             PokemonSaveParser.display_party_pokemon_detailed(save_data['party_pokemon'])
         else:
             PokemonSaveParser.display_save_info(save_data)
-    except (FileNotFoundError, IOError, ValueError) as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+            
     except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
