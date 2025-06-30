@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+"""
+Pokemon Quetzal/Emerald Save File Parser
+
+This parser analyzes save files from Pokemon Emerald-based ROM hack Quetzal.
+"""
+
 import struct
 import ctypes
 import argparse
@@ -24,6 +30,10 @@ SAVEBLOCK2_SIZE = SECTOR_DATA_SIZE
 EMERALD_SIGNATURE = 0x08012025
 VANILLA_POKEMON_NAME_LENGTH = 10
 PLAYER_NAME_LENGTH = 7
+
+# Pokémon Quetzal uses 18 sectors per slot instead of 14
+SECTORS_PER_SLOT = 18
+TOTAL_SECTORS = 32
 
 # Party Pokemon constants (for this save file format)
 PARTY_START_OFFSET = 0x6A8
@@ -88,54 +98,46 @@ class SaveBlock2(ctypes.Structure):
     ]
 
 class PokemonData(ctypes.Structure):
-    """
-    Pokemon data structure for Pokemon Quetzal rom hack (104 bytes total).
-    
-    Based on actual data analysis of the save file format.
-    This structure has been reverse-engineered from working save data.
-    """
+    """Pokemon data structure for Pokemon Quetzal ROM hack (104 bytes total)."""
     _pack_ = 1
     _fields_ = [
-        ("personality", ctypes.c_uint32),           # 0x00 - Personality value (4 bytes)
-        ("otId", ctypes.c_uint32),                  # 0x04 - Original Trainer ID (4 bytes)
-        ("nickname", ctypes.c_uint8 * 10),          # 0x08 - Pokemon nickname (10 bytes)
-        ("unknown_12", ctypes.c_uint8 * 2),         # 0x12 - Unknown/padding (2 bytes)
-        ("otName", ctypes.c_uint8 * 7),             # 0x14 - OT Name (7 bytes)
-        ("unknown_1B", ctypes.c_uint8 * 8),         # 0x1B - Unknown/padding (8 bytes)
-        ("currentHp", ctypes.c_uint16),             # 0x23 - Current HP (2 bytes)
-        ("unknown_25", ctypes.c_uint8 * 3),         # 0x25 - Unknown/padding (3 bytes)
-        ("speciesId", ctypes.c_uint16),             # 0x28 - Species ID (2 bytes)
-        ("item", ctypes.c_uint16),                  # 0x2A - Held Item (2 bytes)
-        ("unknown_2C", ctypes.c_uint8 * 8),         # 0x2C - Unknown/padding (8 bytes)
-        # Moves (0x34 - 0x3B)
-        ("move1", ctypes.c_uint16),                 # 0x34 - Move 1 ID
-        ("move2", ctypes.c_uint16),                 # 0x36 - Move 2 ID
-        ("move3", ctypes.c_uint16),                 # 0x38 - Move 3 ID
-        ("move4", ctypes.c_uint16),                 # 0x3A - Move 4 ID
-        # Move PPs (0x3C - 0x3F)
-        ("pp1", ctypes.c_uint8),                    # 0x3C - PP for move 1
-        ("pp2", ctypes.c_uint8),                    # 0x3D - PP for move 2
-        ("pp3", ctypes.c_uint8),                    # 0x3E - PP for move 3
-        ("pp4", ctypes.c_uint8),                    # 0x3F - PP for move 4
-        # EVs (0x40 - 0x45)
-        ("hpEV", ctypes.c_uint8),                   # 0x40 - HP EV
-        ("atkEV", ctypes.c_uint8),                  # 0x41 - Attack EV
-        ("defEV", ctypes.c_uint8),                  # 0x42 - Defense EV
-        ("speEV", ctypes.c_uint8),                  # 0x43 - Speed EV
-        ("spaEV", ctypes.c_uint8),                  # 0x44 - Sp. Atk EV
-        ("spdEV", ctypes.c_uint8),                  # 0x45 - Sp. Def EV
-        ("unknown_46", ctypes.c_uint8 * 10),        # 0x46 - Unknown/padding (10 bytes)
-        ("ivData", ctypes.c_uint32),                # 0x50 - IVs (4 bytes)
-        ("unknown_54", ctypes.c_uint8 * 4),         # 0x54 - Unknown/padding (4 bytes)
-        ("level", ctypes.c_uint8),                  # 0x58 - Level (1 byte)
-        ("unknown_59", ctypes.c_uint8),             # 0x59 - Unknown/padding (1 byte)
-        ("maxHp", ctypes.c_uint16),                 # 0x5A - Max HP (2 bytes)
-        ("attack", ctypes.c_uint16),                # 0x5C - Attack (2 bytes)
-        ("defense", ctypes.c_uint16),               # 0x5E - Defense (2 bytes)
-        ("speed", ctypes.c_uint16),                 # 0x60 - Speed (2 bytes)
-        ("spAttack", ctypes.c_uint16),              # 0x62 - Sp. Attack (2 bytes)
-        ("spDefense", ctypes.c_uint16),             # 0x64 - Sp. Defense (2 bytes)
-        ("unknown_66", ctypes.c_uint8 * 2),         # 0x66 - Unknown/padding (2 bytes)
+        ("personality", ctypes.c_uint32),           # 0x00
+        ("otId", ctypes.c_uint32),                  # 0x04
+        ("nickname", ctypes.c_uint8 * 10),          # 0x08
+        ("unknown_12", ctypes.c_uint8 * 2),         # 0x12
+        ("otName", ctypes.c_uint8 * 7),             # 0x14
+        ("unknown_1B", ctypes.c_uint8 * 8),         # 0x1B
+        ("currentHp", ctypes.c_uint16),             # 0x23
+        ("unknown_25", ctypes.c_uint8 * 3),         # 0x25
+        ("speciesId", ctypes.c_uint16),             # 0x28
+        ("item", ctypes.c_uint16),                  # 0x2A
+        ("unknown_2C", ctypes.c_uint8 * 8),         # 0x2C
+        ("move1", ctypes.c_uint16),                 # 0x34
+        ("move2", ctypes.c_uint16),                 # 0x36
+        ("move3", ctypes.c_uint16),                 # 0x38
+        ("move4", ctypes.c_uint16),                 # 0x3A
+        ("pp1", ctypes.c_uint8),                    # 0x3C
+        ("pp2", ctypes.c_uint8),                    # 0x3D
+        ("pp3", ctypes.c_uint8),                    # 0x3E
+        ("pp4", ctypes.c_uint8),                    # 0x3F
+        ("hpEV", ctypes.c_uint8),                   # 0x40
+        ("atkEV", ctypes.c_uint8),                  # 0x41
+        ("defEV", ctypes.c_uint8),                  # 0x42
+        ("speEV", ctypes.c_uint8),                  # 0x43
+        ("spaEV", ctypes.c_uint8),                  # 0x44
+        ("spdEV", ctypes.c_uint8),                  # 0x45
+        ("unknown_46", ctypes.c_uint8 * 10),        # 0x46
+        ("ivData", ctypes.c_uint32),                # 0x50
+        ("unknown_54", ctypes.c_uint8 * 4),         # 0x54
+        ("level", ctypes.c_uint8),                  # 0x58
+        ("unknown_59", ctypes.c_uint8),             # 0x59
+        ("maxHp", ctypes.c_uint16),                 # 0x5A
+        ("attack", ctypes.c_uint16),                # 0x5C
+        ("defense", ctypes.c_uint16),               # 0x5E
+        ("speed", ctypes.c_uint16),                 # 0x60
+        ("spAttack", ctypes.c_uint16),              # 0x62
+        ("spDefense", ctypes.c_uint16),             # 0x64
+        ("unknown_66", ctypes.c_uint8 * 2),         # 0x66
     ]
     
     # Type annotation for raw_bytes attribute that gets added dynamically
@@ -143,91 +145,58 @@ class PokemonData(ctypes.Structure):
     
     @property
     def nature_str(self) -> str:
-        # Nature is determined by the lowest byte of personality. for example if personality is e9 02 00 00, then nature bit is 0xE9.
-        nature_index = (self.personality & 0xFF) % 25  # Get the lowest byte of personality
+        nature_index = (self.personality & 0xFF) % 25
         return get_nature_name(nature_index)
     
     @property
     def otName_str(self) -> str:
-        # Decode the OT name from the structure data
         return PokemonSaveParser.decode_pokemon_string(bytes(self.otName))
 
     @property
     def otId_str(self) -> str:
-        # Returns the lower 16 bits of otId as a zero-padded 5-digit string
         return f"{self.otId & 0xFFFF:05}"
     
     @property
     def nickname_str(self) -> str:
-        # Decode the nickname bytes to a string
         return PokemonSaveParser.decode_pokemon_string(bytes(self.nickname))
 
     @property
     def species_name(self) -> str:
-        """Get the species name for this Pokemon"""
         return get_species_name(self.speciesId)
     
     @property
     def moves(self) -> List[int]:
-        """
-        Get the move IDs for this Pokemon.
-        Moves are stored directly in the structure fields.
-        """
         return [self.move1, self.move2, self.move3, self.move4]
     
     @property
     def moves_from_substruct(self) -> List[int]:
-        """
-        Legacy method for backward compatibility.
-        Now delegates to the new moves property.
-        """
+        """Legacy method for backward compatibility."""
         return self.moves
     
     @property
     def evs(self) -> List[int]:
-        """
-        Get the EV values for this Pokemon directly from the structure.
-        Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]
-        """
+        """Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]"""
         return [self.hpEV, self.atkEV, self.defEV, self.speEV, self.spaEV, self.spdEV]
     
     @property
     def ivs(self) -> List[int]:
-        """
-        Get the IV values for this Pokemon by unpacking the ivData field.
-        Returns [HP, Attack, Defense, Speed, Sp.Attack, Sp.Defense]
-        """
+        """Returns [HP, Attack, Defense, Speed, Sp. Attack, Sp. Defense]"""
         iv_data = self.ivData
-        hp_iv = iv_data & 0x1F
-        atk_iv = (iv_data >> 5) & 0x1F
-        def_iv = (iv_data >> 10) & 0x1F
-        spe_iv = (iv_data >> 15) & 0x1F
-        spa_iv = (iv_data >> 20) & 0x1F
-        spd_iv = (iv_data >> 25) & 0x1F
-        return [hp_iv, atk_iv, def_iv, spe_iv, spa_iv, spd_iv]
+        return [
+            iv_data & 0x1F,           # HP
+            (iv_data >> 5) & 0x1F,    # Attack
+            (iv_data >> 10) & 0x1F,   # Defense
+            (iv_data >> 15) & 0x1F,   # Speed
+            (iv_data >> 20) & 0x1F,   # Sp. Attack
+            (iv_data >> 25) & 0x1F,   # Sp. Defense
+        ]
     
     @property
     def move_names(self) -> List[str]:
-        """
-        Get the move names for this Pokemon's current moves.
-        """
-        moves = self.moves
-        names = []
-        for move_id in moves:
-            if move_id == 0:
-                names.append("---")
-            else:
-                # Use the data loader for better move names
-                move_name = get_move_name(move_id)
-                names.append(move_name)
-        return names
+        return [get_move_name(move_id) if move_id != 0 else "---" for move_id in self.moves]
 
     @property
     def pp_values(self) -> List[int]:
-        """
-        Get the PP values for the Pokemon's moves.
-        PP values are stored directly in the structure fields.
-        """
         return [self.pp1, self.pp2, self.pp3, self.pp4]
     
 
@@ -240,19 +209,14 @@ class SectorInfo(NamedTuple):
 
 
 class PokemonSaveParser:
-    """
-    Pokemon Quetzal rom hack save file parser
+    """Pokemon Quetzal ROM hack save file parser."""
     
-    This parser handles the specific save file format used by Pokemon Quetzal,
-    which differs from standard pokeemerald-expansion in structure layout,
-    and field sizes.
-    """
-    
-    def __init__(self, save_path: str):
+    def __init__(self, save_path: str, forced_slot: Optional[int] = None):
         self.save_path = Path(save_path)
         self.save_data: Optional[bytes] = None
         self.active_slot_start: int = 0
         self.sector_map: Dict[int, int] = {}
+        self.forced_slot = forced_slot  # None for auto-detect, 1 for slot 1, 2 for slot 2
 
     def load_save_file(self) -> None:
         if not self.save_path.exists():
@@ -276,47 +240,140 @@ class PokemonSaveParser:
     def get_sector_info(self, sector_index: int) -> SectorInfo:
         if not self.save_data:
             raise ValueError("Save data not loaded")
+        
+        # Calculate the footer offset
         footer_offset = (sector_index * SECTOR_SIZE) + SECTOR_SIZE - SECTOR_FOOTER_SIZE
+        
+        if footer_offset + SECTOR_FOOTER_SIZE > len(self.save_data):
+            return SectorInfo(-1, 0, 0, False)
+            
         try:
+            # Extract footer data: id (u16), checksum (u16), signature (u32), counter (u32)
             sector_id, checksum, signature, counter = struct.unpack(
                 "<HHII",
                 self.save_data[footer_offset:footer_offset + SECTOR_FOOTER_SIZE]
             )
-            valid = signature == EMERALD_SIGNATURE
+            
+            # Check signature first
+            if signature != EMERALD_SIGNATURE:
+                return SectorInfo(sector_id, checksum, counter, False)
+            
+            # Get sector data for checksum verification
+            sector_start = sector_index * SECTOR_SIZE
+            sector_data = self.save_data[sector_start:sector_start + SECTOR_DATA_SIZE]
+            
+            # Calculate checksum and verify
+            calculated_checksum = self.calculate_sector_checksum(sector_data)
+            valid = (calculated_checksum == checksum)
+            
             return SectorInfo(sector_id, checksum, counter, valid)
         except (struct.error, IndexError):
             return SectorInfo(-1, 0, 0, False)
 
     def determine_active_slot(self) -> None:
-        slot1_info = self.get_sector_info(0)
-        slot2_info = self.get_sector_info(14)
-        if slot2_info.counter > slot1_info.counter:
-            self.active_slot_start = 14
-        else:
-            self.active_slot_start = 0
+        """Determine the active save slot based on highest counter or forced selection."""
+        if self.forced_slot is not None:
+            self.active_slot_start = 0 if self.forced_slot == 1 else 14
+            return
+        
+        # Get highest counter from each slot
+        slot1_counter = max((self.get_sector_info(i).counter for i in range(18) 
+                            if self.get_sector_info(i).valid), default=0)
+        slot2_counter = max((self.get_sector_info(i).counter for i in range(14, 32) 
+                            if self.get_sector_info(i).valid), default=0)
+        
+        # Use slot with higher counter (slot 2 wins ties)
+        self.active_slot_start = 14 if slot2_counter >= slot1_counter else 0
+
+    def debug_save_slots(self) -> None:
+        """Debug method to print information about both save slots."""
+        print("\n--- Save Slot Debug Information ---")
+        
+        # Helper function to analyze a slot
+        def analyze_slot(slot_range, slot_name):
+            valid_sectors = []
+            counters = []
+            for i in slot_range:
+                sector_info = self.get_sector_info(i)
+                if sector_info.valid:
+                    valid_sectors.append(i)
+                    counters.append(sector_info.counter)
+                    print(f"  Sector {i}: ID={sector_info.id}, Counter={sector_info.counter:08X}")
+            
+            max_counter = max(counters) if counters else 0
+            print(f"{slot_name}: {len(valid_sectors)} valid sectors, max counter {max_counter:08X}")
+            return len(valid_sectors), max_counter
+        
+        # Analyze both slots
+        slot1_count, slot1_counter = analyze_slot(range(18), "Slot 1 (sectors 0-17)")
+        slot2_count, slot2_counter = analyze_slot(range(14, 32), "Slot 2 (sectors 14-31)")
+        
+        # Show active slot decision
+        active_slot = 14 if slot2_counter >= slot1_counter else 0
+        print(f"\nActive slot: {active_slot} (highest counter wins, slot 2 wins ties)")
 
     def build_sector_map(self) -> None:
+        """
+        Build sector map for the active slot.
+        If a forced slot is specified, prioritize that slot but allow recovery from the other slot.
+        Otherwise, use sectors with the highest counter and recover missing sectors.
+        """
         self.sector_map = {}
-        for i in range(14):
-            sector_info = self.get_sector_info(self.active_slot_start + i)
-            if sector_info.valid:
-                self.sector_map[sector_info.id] = self.active_slot_start + i
+        
+        if self.forced_slot is not None:
+            # Forced slot: prioritize specified slot but allow recovery
+            primary_range = range(18) if self.forced_slot == 1 else range(14, 32)
+            other_range = range(14, 32) if self.forced_slot == 1 else range(18)
+            
+            # Collect sectors from forced slot
+            for i in primary_range:
+                sector_info = self.get_sector_info(i)
+                if sector_info.valid:
+                    self.sector_map[sector_info.id] = i
+            
+            # Recover missing critical sectors from other slot
+            missing_critical = [i for i in range(5) if i not in self.sector_map]
+            for i in other_range:
+                sector_info = self.get_sector_info(i)
+                if sector_info.valid and sector_info.id in missing_critical:
+                    self.sector_map[sector_info.id] = i
+                    missing_critical.remove(sector_info.id)
+            
+            if missing_critical:
+                print(f"[WARNING] Missing critical sectors: {missing_critical}")
+                
+        else:
+            # Auto-detection mode: use sectors with highest counters
+            all_sectors = {}  # sector_id -> (physical_sector, counter)
+            
+            for i in range(32):
+                sector_info = self.get_sector_info(i)
+                if sector_info.valid:
+                    sector_id = sector_info.id
+                    if sector_id not in all_sectors or sector_info.counter > all_sectors[sector_id][1]:
+                        all_sectors[sector_id] = (i, sector_info.counter)
+            
+            for sector_id, (physical_sector, counter) in all_sectors.items():
+                self.sector_map[sector_id] = physical_sector
+            
+            missing_critical = [i for i in range(5) if i not in self.sector_map]
+            if missing_critical:
+                print(f"[ERROR] Missing critical sectors: {missing_critical}")
 
     def extract_saveblock1(self) -> bytearray:
         if not self.save_data:
             raise ValueError("Save data not loaded")
+        
         saveblock1_sectors = [i for i in range(1, 5) if i in self.sector_map]
         if not saveblock1_sectors:
             raise ValueError("No SaveBlock1 sectors found")
-        if len(saveblock1_sectors) != 4:
-            print(f"[INFO] Found {len(saveblock1_sectors)}/4 SaveBlock1 sectors (some data may be incomplete)")
+        
         saveblock1_data = bytearray(SAVEBLOCK1_SIZE)
         for sector_id in saveblock1_sectors:
             sector_idx = self.sector_map[sector_id]
             start_offset = sector_idx * SECTOR_SIZE
             sector_data = self.save_data[start_offset:start_offset + SECTOR_DATA_SIZE]
-            expected_chunk = sector_id - 1
-            chunk_offset = expected_chunk * SECTOR_DATA_SIZE
+            chunk_offset = (sector_id - 1) * SECTOR_DATA_SIZE
             saveblock1_data[chunk_offset:chunk_offset + SECTOR_DATA_SIZE] = sector_data[:SECTOR_DATA_SIZE]
         return saveblock1_data
 
@@ -388,43 +445,27 @@ class PokemonSaveParser:
         if not party_pokemon:
             print("No Pokémon found in party.")
             return
+        
         header = (
-            f"{'Slot':<5}"
-            f"{'Dex ID':<8}"
-            f"{'Nickname':<12}"
-            f"{'Lv':<4}"
-            f"{'Nature':<10}"
-            f"{'HP':<30} "
-            f"{'Atk':<5}"
-            f"{'Def':<5}"
-            f"{'Spe':<5}"
-            f"{'SpA':<5}"
-            f"{'SpD':<5}"
-            f"{'OT Name':<10}"
-            f"{'IDNo':<7}"
+            f"{'Slot':<5}{'Dex ID':<8}{'Nickname':<12}{'Lv':<4}{'Nature':<10}"
+            f"{'HP':<30} {'Atk':<5}{'Def':<5}{'Spe':<5}{'SpA':<5}{'SpD':<5}"
+            f"{'OT Name':<10}{'IDNo':<7}"
         )
         print(header)
         print("-" * len(header))
+        
         for slot, pokemon in enumerate(party_pokemon, 1):
             hp_percent = (pokemon.currentHp / pokemon.maxHp) if pokemon.maxHp > 0 else 0.0
             hp_bar_length = 20
             filled_bars = int(hp_bar_length * hp_percent)
             hp_bar = "█" * filled_bars + "░" * (hp_bar_length - filled_bars)
             hp_display = f"[{hp_bar}] {pokemon.currentHp}/{pokemon.maxHp}"
+            
             print(
-                f"{slot:<5}"
-                f"{pokemon.speciesId:<8}"
-                f"{pokemon.nickname_str:<12}"
-                f"{pokemon.level:<4}"
-                f"{pokemon.nature_str:<10}"
-                f"{hp_display:<30} "
-                f"{pokemon.attack:<5}"
-                f"{pokemon.defense:<5}"
-                f"{pokemon.speed:<5}"
-                f"{pokemon.spAttack:<5}"
-                f"{pokemon.spDefense:<5}"
-                f"{pokemon.otName_str:<10}"
-                f"{pokemon.otId_str:<7}"
+                f"{slot:<5}{pokemon.speciesId:<8}{pokemon.nickname_str:<12}{pokemon.level:<4}"
+                f"{pokemon.nature_str:<10}{hp_display:<30} {pokemon.attack:<5}{pokemon.defense:<5}"
+                f"{pokemon.speed:<5}{pokemon.spAttack:<5}{pokemon.spDefense:<5}"
+                f"{pokemon.otName_str:<10}{pokemon.otId_str:<7}"
             )
 
     @staticmethod
@@ -634,21 +675,52 @@ class PokemonSaveParser:
             console.print(pokemon_panel)
             console.print()
 
+    def calculate_sector_checksum(self, sector_data: bytes) -> int:
+        """Calculate sector checksum using the original game's algorithm."""
+        if len(sector_data) < SECTOR_DATA_SIZE:
+            return 0
+            
+        checksum = 0
+        for i in range(0, SECTOR_DATA_SIZE, 4):
+            if i + 4 <= len(sector_data):
+                value = struct.unpack("<I", sector_data[i:i+4])[0]
+                checksum += value
+        
+        return ((checksum >> 16) + (checksum & 0xFFFF)) & 0xFFFF
+
 def main() -> None:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 
-    parser = argparse.ArgumentParser(description='Pokemon Quetzal Rom Hack Save File Parser')
+    parser = argparse.ArgumentParser(description='Pokemon Quetzal ROM Hack Save File Parser')
     parser.add_argument('save_file', nargs='?', default=DEFAULT_SAVE_PATH,
                         help='Path to the save file (default: ./save/player1.sav)')
     parser.add_argument('--debugParty', action='store_true', help='Display raw party pokemon bytes')
-    parser.add_argument('--detailed', action='store_true', help='Display detailed party pokemon information with rich formatting')
-    parser.add_argument('--json', action='store_true', help='Return json instead of a human readable table')
+    parser.add_argument('--debugSlots', action='store_true', help='Display save slot debug information')
+    parser.add_argument('--detailed', action='store_true', help='Display detailed party pokemon information')
+    parser.add_argument('--json', action='store_true', help='Return JSON instead of human readable table')
+    
+    slot_group = parser.add_mutually_exclusive_group()
+    slot_group.add_argument('--slot1', action='store_true', help='Force load from save slot 1 (sectors 0-17)')
+    slot_group.add_argument('--slot2', action='store_true', help='Force load from save slot 2 (sectors 14-31)')
+    
     args = parser.parse_args()
-    if args.save_file == DEFAULT_SAVE_PATH and len(sys.argv) == 1:
-        print(f"[INFO] No save file specified, using default: {args.save_file}", file=sys.stderr)
+    
+    # Determine forced slot
+    forced_slot = None
+    if args.slot1:
+        forced_slot = 1
+    elif args.slot2:
+        forced_slot = 2
+    
     try:
-        save_parser = PokemonSaveParser(args.save_file)
+        save_parser = PokemonSaveParser(args.save_file, forced_slot)
+        
+        if args.debugSlots:
+            save_parser.load_save_file()
+            save_parser.debug_save_slots()
+            return
+            
         save_data = save_parser.parse_save_file()
         if args.json:
             PokemonSaveParser.display_json_output(save_data)
